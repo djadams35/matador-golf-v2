@@ -1,0 +1,76 @@
+/* Matador brand colors and global styles */
+:root {
+  --matador-red: #E31B23;
+  --matador-red-dark: #C9151C;
+  --matador-black: #222222;
+}
+
+body {
+  background-color: #f8f9fa;
+}
+
+/* Navbar */
+.navbar-matador {
+  background-color: var(--matador-black);
+}
+
+/* Buttons */
+.btn-matador {
+  background-color: var(--matador-red);
+  border-color: var(--matador-red);
+  color: white;
+}
+.btn-matador:hover,
+.btn-matador:focus {
+  background-color: var(--matador-red-dark);
+  border-color: var(--matador-red-dark);
+  color: white;
+}
+
+/* Backgrounds */
+.bg-matador-red { background-color: var(--matador-red) !important; }
+.bg-matador-black { background-color: var(--matador-black) !important; }
+
+/* Text */
+.text-matador-red { color: var(--matador-red) !important; }
+
+/* Cards / tables */
+.border-matador {
+  border-color: var(--matador-red) !important;
+  border-width: 2px !important;
+}
+.table-matador-success {
+  background-color: #FFEAEB !important;
+  color: var(--matador-black);
+  font-weight: 700;
+}
+.badge-matador {
+  background-color: var(--matador-red);
+  color: white;
+}
+
+/* Drag & drop upload zone */
+.upload-zone {
+  border: 2px dashed #ccc;
+  border-radius: 8px;
+  transition: border-color 0.2s, background-color 0.2s;
+}
+.upload-zone.drag-active {
+  border-color: var(--matador-red);
+  border-width: 3px;
+  background-color: #fff5f5;
+}
+
+/* Section tabs */
+.nav-pills .nav-link.active {
+  background-color: var(--matador-red);
+}
+.nav-pills .nav-link {
+  color: var(--matador-black);
+}
+
+/* Responsive table font */
+@media (max-width: 768px) {
+  .table-responsive { font-size: 0.85rem; }
+  .badge { padding: 0.3em 0.55em; }
+}
