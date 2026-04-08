@@ -7,8 +7,9 @@ import { strokesReceived, getHoleHandicaps } from './handicapUtils';
  * A skin is won outright only when one player has the lowest net score on a hole.
  * If two or more players tie, no skin is awarded for that hole.
  *
- * @param {Array}  players  - From csvParser: [{ name, halfHandicap, scores }]
+ * @param {Array}  players  - From csvParser: [{ name, fullHandicap, halfHandicap, scores }]
  * @param {'front'|'back'} section
+ * @param {'half'|'full'} handicapType - 'half' (default, skins standard) or 'full'
  * @returns {Object} keyed by hole number (1-9 or 10-18):
  *   {
  *     winner: string | 'No Winner',
@@ -16,7 +17,7 @@ import { strokesReceived, getHoleHandicaps } from './handicapUtils';
  *     scores: [{ name, gross, net, strokes }]
  *   }
  */
-export function calculateSkins(players, section) {
+export function calculateSkins(players, section, handicapType = 'half') {
   const holeHandicaps = getHoleHandicaps(section);
 
   // Sort players by handicap for consistent display (lowest first)
@@ -32,7 +33,8 @@ export function calculateSkins(players, section) {
     const holeStrokeIndex = holeHandicaps[i];
 
     const holeScores = sorted.map(player => {
-      const strokes = strokesReceived(player.halfHandicap, holeStrokeIndex);
+      const hdcp = handicapType === 'full' ? player.fullHandicap : player.halfHandicap;
+      const strokes = strokesReceived(hdcp, holeStrokeIndex);
       const gross = player.scores[i];
       return {
         name: player.name,

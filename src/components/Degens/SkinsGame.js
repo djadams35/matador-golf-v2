@@ -14,6 +14,7 @@ export default function SkinsGame() {
   // Also supports ad-hoc CSV upload (for quick use outside of saved rounds)
   const [csvMode, setCsvMode] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+  const [handicapType, setHandicapType] = useState('half'); // 'half' or 'full'
 
   useEffect(() => { fetchRounds(); }, []);
 
@@ -69,7 +70,7 @@ export default function SkinsGame() {
     }));
 
     setPlayers(playerList);
-    setSkinsResults(calculateSkins(playerList, sec));
+    setSkinsResults(calculateSkins(playerList, sec, handicapType));
     setSelectedRound(roundId);
   }
 
@@ -87,16 +88,23 @@ export default function SkinsGame() {
       const result = await parseRoundCSV(file);
       setSection(result.section);
       setPlayers(result.players);
-      setSkinsResults(calculateSkins(result.players, result.section));
+      setSkinsResults(calculateSkins(result.players, result.section, handicapType));
       setSelectedRound(null);
     } catch (err) {
       console.error(err);
     }
   }
 
+  // Recalculate when handicap type toggle changes
+  React.useEffect(() => {
+    if (players.length > 0) {
+      setSkinsResults(calculateSkins(players, section, handicapType));
+    }
+  }, [handicapType]); // eslint-disable-line
+
   return (
     <div>
-      <div className="d-flex align-items-center gap-3 mb-4 flex-wrap">
+      <div className="d-flex align-items-center justify-content-between gap-3 mb-4 flex-wrap">
         <div className="d-flex gap-2">
           <button className={`btn btn-sm ${!csvMode ? 'btn-matador' : 'btn-outline-secondary'}`} onClick={() => setCsvMode(false)}>
             Load from History
@@ -104,6 +112,23 @@ export default function SkinsGame() {
           <button className={`btn btn-sm ${csvMode ? 'btn-matador' : 'btn-outline-secondary'}`} onClick={() => setCsvMode(true)}>
             Upload CSV
           </button>
+        </div>
+        <div className="d-flex align-items-center gap-2">
+          <span className="text-muted small fw-semibold">Handicap:</span>
+          <div className="btn-group btn-group-sm">
+            <button
+              className={`btn ${handicapType === 'half' ? 'btn-matador' : 'btn-outline-secondary'}`}
+              onClick={() => setHandicapType('half')}
+            >
+              Half
+            </button>
+            <button
+              className={`btn ${handicapType === 'full' ? 'btn-matador' : 'btn-outline-secondary'}`}
+              onClick={() => setHandicapType('full')}
+            >
+              Full
+            </button>
+          </div>
         </div>
       </div>
 
@@ -149,7 +174,7 @@ export default function SkinsGame() {
                   <thead className="bg-matador-black text-white">
                     <tr>
                       <th className="text-start" style={{ minWidth: 130 }}>Player</th>
-                      <th className="text-center">HC</th>
+                      <th className="text-center">{handicapType === 'half' ? '½ HC' : 'Full HC'}</th>
                       {[...Array(9)].map((_, i) => {
                         const holeNumber = section === 'front' ? i + 1 : i + 10;
                         return (
@@ -165,7 +190,7 @@ export default function SkinsGame() {
                     {players.map(player => (
                       <tr key={player.name}>
                         <td className="fw-bold">{player.name}</td>
-                        <td className="text-center">{player.halfHandicap}</td>
+                        <td className="text-center">{handicapType === 'half' ? player.halfHandicap : player.fullHandicap}</td>
                         {[...Array(9)].map((_, i) => {
                           const holeNumber = section === 'front' ? i + 1 : i + 10;
                           const result = skinsResults[holeNumber];
