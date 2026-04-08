@@ -3,7 +3,7 @@ import { supabase } from '../../supabaseClient';
 import { parseRoundCSV } from '../../utils/csvParser';
 import { calculateSkins } from '../../utils/skinsCalculator';
 import { calculateMatchPlay } from '../../utils/matchPlayCalculator';
-import { totalNetScore, getHoleHandicaps } from '../../utils/handicapUtils';
+import { getHoleHandicaps } from '../../utils/handicapUtils';
 
 export default function UploadRound() {
   const [dragActive, setDragActive] = useState(false);
@@ -137,12 +137,15 @@ export default function UploadRound() {
 
       // ── 6. Calculate and save weekly low net (Degens) ─────────────────────
       const holeHandicaps = getHoleHandicaps(section);
-      const degenRows = players.map(p => ({
-        round_id: round.id,
-        player_id: playerMap[p.name],
-        net_total: totalNetScore(p.scores, p.fullHandicap, holeHandicaps),
-        gross_total: p.scores.reduce((a, b) => a + b, 0),
-      }));
+      const degenRows = players.map(p => {
+        const grossTotal = p.scores.reduce((a, b) => a + b, 0);
+        return {
+          round_id: round.id,
+          player_id: playerMap[p.name],
+          gross_total: grossTotal,
+          net_total: grossTotal - p.fullHandicap, // simple subtraction: handicaps are already 9-hole
+        };
+      });
       const { error: netError } = await supabase.from('round_net_totals').insert(degenRows);
       if (netError) throw new Error('Net totals insert failed: ' + netError.message);
 
