@@ -5,7 +5,6 @@ import { getHoleHandicaps, strokesReceived } from '../../utils/handicapUtils';
 export default function PlayerLeaderboards() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [scoreType, setScoreType] = useState('gross'); // 'gross' | 'net' for eagle/birdie/par
 
   useEffect(() => { fetchData(); }, []);
 
@@ -22,7 +21,6 @@ export default function PlayerLeaderboards() {
 
     // Build per-player stats
     const playerStats = {};
-    const roundScores = {}; // roundId -> playerId -> { gross[], net[], hdcp }
 
     scores.forEach(row => {
       if (!row.players || !row.rounds) return;
