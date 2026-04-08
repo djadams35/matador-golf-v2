@@ -40,10 +40,7 @@ export default function SkinsGame() {
     const { data: scores } = await supabase
       .from('player_scores')
       .select('hole_number, gross_score, full_handicap, players(id, name)')
-      .eq('round_id', roundId)
-      .in('players.id',
-        (await supabase.from('degens').select('player_id').eq('active', true)).data?.map(d => d.player_id) || []
-      );
+      .eq('round_id', roundId);
 
     if (!scores || scores.length === 0) {
       setPlayers([]);
