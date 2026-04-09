@@ -10,13 +10,14 @@ export default function SkinsGame() {
   const [skinsResults, setSkinsResults] = useState({});
   const [section, setSection] = useState('front');
   const [loading, setLoading] = useState(true);
+  const [seasonSkins, setSeasonSkins] = useState([]);
 
   // Also supports ad-hoc CSV upload (for quick use outside of saved rounds)
   const [csvMode, setCsvMode] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [handicapType, setHandicapType] = useState('full'); // 'full' or 'half'
 
-  useEffect(() => { fetchRounds(); }, []);
+  useEffect(() => { fetchRounds(); fetchSeasonSkins(); }, []);
 
   async function fetchRounds() {
     setLoading(true);
@@ -26,6 +27,26 @@ export default function SkinsGame() {
       .order('played_date', { ascending: false });
     setRounds(data || []);
     setLoading(false);
+  }
+
+  async function fetchSeasonSkins() {
+    const { data } = await supabase
+      .from('skins_results')
+      .select('winner_name')
+      .not('winner_name', 'is', null);
+
+    if (!data) return;
+
+    const counts = {};
+    data.forEach(row => {
+      counts[row.winner_name] = (counts[row.winner_name] || 0) + 1;
+    });
+
+    const sorted = Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, skins]) => ({ name, skins }));
+
+    setSeasonSkins(sorted);
   }
 
   async function loadRound(roundId) {
@@ -104,6 +125,31 @@ export default function SkinsGame() {
 
   return (
     <div>
+      {/* Season Skins Leaderboard */}
+      {seasonSkins.length > 0 && (
+        <div className="card border-0 shadow-sm mb-4 border-matador">
+          <div className="card-header bg-matador-red text-white">
+            <h5 className="mb-0"><i className="bi bi-trophy-fill me-2"></i>Season Skins Leaderboard</h5>
+          </div>
+          <div className="card-body p-0">
+            <table className="table table-hover mb-0">
+              <thead className="bg-matador-black text-white">
+                <tr><th>Rank</th><th>Player</th><th className="text-center">Total Skins</th></tr>
+              </thead>
+              <tbody>
+                {seasonSkins.map((row, i) => (
+                  <tr key={row.name} className={i === 0 ? 'table-matador-success' : ''}>
+                    <td className="fw-bold">{i + 1}</td>
+                    <td>{row.name}</td>
+                    <td className="text-center"><span className="badge badge-matador">{row.skins}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       <div className="d-flex align-items-center justify-content-between gap-3 mb-4 flex-wrap">
         <div className="d-flex gap-2">
           <button className={`btn btn-sm ${!csvMode ? 'btn-matador' : 'btn-outline-secondary'}`} onClick={() => setCsvMode(false)}>
