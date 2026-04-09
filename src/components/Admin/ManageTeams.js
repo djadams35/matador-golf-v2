@@ -68,18 +68,10 @@ export default function ManageTeams() {
           const p2 = upserted.find(p => p.name === player2Name);
           if (!p1 || !p2) { errors.push(`${teamName}: could not find players after upsert`); continue; }
 
-          // Check if team already exists
-          const { data: existingList } = await supabase
-            .from('teams')
-            .select('id')
-            .eq('name', teamName);
-
-          if (existingList && existingList.length > 0) { skipped++; continue; }
-
-          // Create team
+          // Upsert team (creates if not exists, updates if exists)
           const { data: team, error: tErr } = await supabase
             .from('teams')
-            .insert({ name: teamName })
+            .upsert({ name: teamName }, { onConflict: 'name' })
             .select()
             .single();
           if (tErr) { errors.push(`${teamName}: ${tErr.message}`); continue; }
