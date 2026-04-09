@@ -35,25 +35,22 @@ export default function ManageTeams() {
     setMessage(null);
 
     Papa.parse(file, {
-      header: true,
+      header: false,
       skipEmptyLines: true,
       complete: async (result) => {
-        // Expected columns: #, Team, Points, [player1 name], [player2 name]
-        // The CSV has: #, Team, Points, Player1Name, Player2Name
         const rows = result.data;
         let created = 0, skipped = 0, errors = [];
 
         for (const row of rows) {
-          // Column names from the CSV: "#", "Team", "Points", and two unnamed player columns
-          // PapaParse will use the header row values as keys
-          const fields = result.meta.fields;
-          // Player names are in columns index 3 and 4 (after #, Team, Points)
-          const teamName = row['Team']?.trim();
-          const player1Name = row[fields[3]]?.trim();
-          const player2Name = row[fields[4]]?.trim();
+          // Skip header row
+          if (String(row[0]).trim() === '#') continue;
+
+          // Columns: 0=#, 1=Team, 2=Player1, 3=Player2
+          const teamName = String(row[1] || '').trim();
+          const player1Name = String(row[2] || '').trim();
+          const player2Name = String(row[3] || '').trim();
 
           if (!teamName || !player1Name || !player2Name) {
-            errors.push(`Skipped row — teamName: "${teamName}", p1: "${player1Name}", p2: "${player2Name}", fields: ${JSON.stringify(fields)}`);
             skipped++;
             continue;
           }
