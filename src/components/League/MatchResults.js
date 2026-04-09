@@ -63,8 +63,8 @@ function HoleTable({ playerA, playerB, scoreMap, section, aTeamName, bTeamName }
                   ) : '—'}
                 </td>
                 <td className="text-center">
-                  {winner === 'A' && <span className="badge badge-matador">{aTeamName}</span>}
-                  {winner === 'B' && <span className="badge bg-secondary">{bTeamName}</span>}
+                  {winner === 'A' && <span className="badge badge-matador">{playerA}</span>}
+                  {winner === 'B' && <span className="badge bg-secondary">{playerB}</span>}
                   {winner === 'tie' && <span className="text-muted small">Tied</span>}
                 </td>
                 <td className={`text-center small ${matchClass}`}>{matchLabel}</td>
