@@ -120,7 +120,20 @@ export default function PlayerLeaderboards() {
 
   return (
     <div>
+      <h6 className="fw-bold mb-3 text-matador-red"><i className="bi bi-flag-fill me-2"></i>Scoring Highlights</h6>
       <div className="row g-4 mb-4">
+        <div className="col-12 col-md-4">
+          <LeaderTable title="Eagles" rows={byEagles} valueKey="eagles" label="Eagles" icon="bi-star-fill" />
+        </div>
+        <div className="col-12 col-md-4">
+          <LeaderTable title="Birdies" rows={byBirdies} valueKey="birdies" label="Birdies" icon="bi-arrow-down-circle-fill" />
+        </div>
+        <div className="col-12 col-md-4">
+          <LeaderTable title="Pars" rows={byPars} valueKey="pars" label="Pars" icon="bi-check-circle-fill" />
+        </div>
+      </div>
+
+      <div className="row g-4">
         <div className="col-12 col-md-6">
           <LeaderTable title="Best Single Round — Gross" rows={byBestGross} valueKey="bestGross" label="Score" />
         </div>
@@ -132,19 +145,6 @@ export default function PlayerLeaderboards() {
         </div>
         <div className="col-12 col-md-6">
           <LeaderTable title="Season Avg Net (Full HC)" rows={byAvgNet} valueKey="avgNet" label="Avg Net" />
-        </div>
-      </div>
-
-      <h6 className="fw-bold mb-3 text-matador-red"><i className="bi bi-flag-fill me-2"></i>Scoring Highlights</h6>
-      <div className="row g-4">
-        <div className="col-12 col-md-4">
-          <LeaderTable title="Eagles" rows={byEagles} valueKey="eagles" label="Eagles" icon="bi-star-fill" />
-        </div>
-        <div className="col-12 col-md-4">
-          <LeaderTable title="Birdies" rows={byBirdies} valueKey="birdies" label="Birdies" icon="bi-arrow-down-circle-fill" />
-        </div>
-        <div className="col-12 col-md-4">
-          <LeaderTable title="Pars" rows={byPars} valueKey="pars" label="Pars" icon="bi-check-circle-fill" />
         </div>
       </div>
     </div>
