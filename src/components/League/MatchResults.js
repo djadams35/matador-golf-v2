@@ -178,7 +178,7 @@ export default function MatchResults() {
         return (
           <div className="card border-0 shadow-sm mb-3" key={r.id}>
             <div className="card-header bg-matador-black text-white d-flex justify-content-between">
-              <span>Week {r.week_number}{r.rounds?.played_date ? ` — ${r.rounds.played_date}` : ''}</span>
+              <span>{aName} vs {bName}{r.week_number ? ` — Week ${r.week_number}` : ''}{r.rounds?.played_date ? ` — ${r.rounds.played_date}` : ''}</span>
               <span className="badge bg-light text-dark">
                 {r.rounds?.holes_played === 'front' ? 'Front 9' : 'Back 9'}
               </span>
