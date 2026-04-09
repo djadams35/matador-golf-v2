@@ -8,20 +8,25 @@ function HoleTable({ playerA, playerB, scoreMap, section, aTeamName, bTeamName }
   // Pre-calculate all hole results so we can build running score
   let runningScore = 0; // positive = A leads, negative = B leads
 
+  const aFirstName = playerA ? playerA.split(' ')[0] : '';
+  const bFirstName = playerB ? playerB.split(' ')[0] : '';
+
   const holes = [...Array(9)].map((_, i) => {
     const holeNumber = section === 'front' ? i + 1 : i + 10;
     const si = holeHandicaps[i];
     const aScore = scoreMap[playerA]?.[i];
     const bScore = scoreMap[playerB]?.[i];
-    const aNet = aScore != null ? aScore.gross - strokesReceived(aScore.fullHandicap, si) : null;
-    const bNet = bScore != null ? bScore.gross - strokesReceived(bScore.fullHandicap, si) : null;
+    const aStrokes = aScore != null ? strokesReceived(aScore.fullHandicap, si) : 0;
+    const bStrokes = bScore != null ? strokesReceived(bScore.fullHandicap, si) : 0;
+    const aNet = aScore != null ? aScore.gross - aStrokes : null;
+    const bNet = bScore != null ? bScore.gross - bStrokes : null;
     const winner = aNet !== null && bNet !== null
       ? aNet < bNet ? 'A' : bNet < aNet ? 'B' : 'tie'
       : null;
     if (winner === 'A') runningScore++;
     else if (winner === 'B') runningScore--;
     const snap = runningScore;
-    return { holeNumber, si, aScore, bScore, aNet, bNet, winner, runningScore: snap };
+    return { holeNumber, si, aScore, bScore, aNet, bNet, aStrokes, bStrokes, winner, runningScore: snap };
   });
 
   return (
@@ -30,7 +35,7 @@ function HoleTable({ playerA, playerB, scoreMap, section, aTeamName, bTeamName }
         <thead className="table-light">
           <tr>
             <th>Hole</th>
-            <th className="text-center text-muted">SI</th>
+            <th className="text-center text-muted">Hole HC</th>
             <th className="text-center">{playerA}</th>
             <th className="text-center">{playerB}</th>
             <th className="text-center">Result</th>
@@ -38,9 +43,9 @@ function HoleTable({ playerA, playerB, scoreMap, section, aTeamName, bTeamName }
           </tr>
         </thead>
         <tbody>
-          {holes.map(({ holeNumber, si, aScore, bScore, aNet, bNet, winner, runningScore: rs }) => {
-            const matchLabel = rs === 0 ? 'AS'
-              : rs > 0 ? `${rs} UP` : `${Math.abs(rs)} DN`;
+          {holes.map(({ holeNumber, si, aScore, bScore, aNet, bNet, aStrokes, bStrokes, winner, runningScore: rs }) => {
+            const leadName = rs > 0 ? aFirstName : rs < 0 ? bFirstName : null;
+            const matchLabel = rs === 0 ? 'AS' : `${leadName} ${Math.abs(rs)} UP`;
             const matchClass = rs > 0 ? 'text-success fw-bold' : rs < 0 ? 'text-danger fw-bold' : 'text-muted';
 
             return (
@@ -48,10 +53,14 @@ function HoleTable({ playerA, playerB, scoreMap, section, aTeamName, bTeamName }
                 <td className="fw-semibold">{holeNumber}</td>
                 <td className="text-center text-muted small">{si}</td>
                 <td className={`text-center ${winner === 'A' ? 'fw-bold table-success' : ''}`}>
-                  {aScore != null ? `${aScore.gross} (${aNet})` : '—'}
+                  {aScore != null ? (
+                    <>{aStrokes > 0 && <span className="text-danger me-1" title="Receives stroke">●</span>}{aScore.gross} ({aNet})</>
+                  ) : '—'}
                 </td>
                 <td className={`text-center ${winner === 'B' ? 'fw-bold table-success' : ''}`}>
-                  {bScore != null ? `${bScore.gross} (${bNet})` : '—'}
+                  {bScore != null ? (
+                    <>{bStrokes > 0 && <span className="text-danger me-1" title="Receives stroke">●</span>}{bScore.gross} ({bNet})</>
+                  ) : '—'}
                 </td>
                 <td className="text-center">
                   {winner === 'A' && <span className="badge badge-matador">{aTeamName}</span>}
@@ -69,8 +78,8 @@ function HoleTable({ playerA, playerB, scoreMap, section, aTeamName, bTeamName }
               {runningScore === 0
                 ? 'All Square'
                 : runningScore > 0
-                  ? <><span className="badge badge-matador me-2">{aTeamName} wins</span>{runningScore} UP</>
-                  : <><span className="badge bg-secondary me-2">{bTeamName} wins</span>{Math.abs(runningScore)} UP</>}
+                  ? <><span className="badge badge-matador me-2">{aTeamName} wins</span>{aFirstName} {runningScore} UP</>
+                  : <><span className="badge bg-secondary me-2">{bTeamName} wins</span>{bFirstName} {Math.abs(runningScore)} UP</>}
             </td>
             <td className="text-center fw-bold">Final</td>
             <td className={`text-center fw-bold ${runningScore > 0 ? 'text-success' : runningScore < 0 ? 'text-danger' : 'text-muted'}`}>
