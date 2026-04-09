@@ -10,14 +10,13 @@ export default function SkinsGame() {
   const [skinsResults, setSkinsResults] = useState({});
   const [section, setSection] = useState('front');
   const [loading, setLoading] = useState(true);
-  const [seasonSkins, setSeasonSkins] = useState([]);
+  const [seasonSkinsFull, setSeasonSkinsFull] = useState([]);
+  const [seasonSkinsHalf, setSeasonSkinsHalf] = useState([]);
 
   const [handicapType, setHandicapType] = useState('full'); // 'full' or 'half'
   const [showAllSkins, setShowAllSkins] = useState(false);
 
-  useEffect(() => { fetchRounds(); }, []); // eslint-disable-line
-
-  useEffect(() => { calculateSeasonSkins(handicapType); }, [handicapType]); // eslint-disable-line
+  useEffect(() => { fetchRounds(); calculateSeasonSkins(); }, []); // eslint-disable-line
 
   async function fetchRounds() {
     setLoading(true);
@@ -33,7 +32,7 @@ export default function SkinsGame() {
     }
   }
 
-  async function calculateSeasonSkins(hdcpType) {
+  async function calculateSeasonSkins() {
     const { data: scores } = await supabase
       .from('player_scores')
       .select('round_id, hole_number, gross_score, full_handicap, players(name), rounds(holes_played)');
@@ -60,25 +59,30 @@ export default function SkinsGame() {
       roundMap[roundId].playerMap[name].scores.push({ hole: s.hole_number, gross: s.gross_score });
     });
 
-    const winCounts = {};
+    const fullCounts = {};
+    const halfCounts = {};
     Object.values(roundMap).forEach(round => {
       const playerList = Object.values(round.playerMap).map(p => ({
         ...p,
         scores: p.scores.sort((a, b) => a.hole - b.hole).map(s => s.gross),
       }));
-      const skins = calculateSkins(playerList, round.section, hdcpType);
-      Object.values(skins).forEach(result => {
-        if (result.winner !== 'No Winner') {
-          winCounts[result.winner] = (winCounts[result.winner] || 0) + 1;
-        }
+      ['full', 'half'].forEach(hdcpType => {
+        const counts = hdcpType === 'full' ? fullCounts : halfCounts;
+        const skins = calculateSkins(playerList, round.section, hdcpType);
+        Object.values(skins).forEach(result => {
+          if (result.winner !== 'No Winner') {
+            counts[result.winner] = (counts[result.winner] || 0) + 1;
+          }
+        });
       });
     });
 
-    const sorted = Object.entries(winCounts)
+    const toSorted = counts => Object.entries(counts)
       .sort((a, b) => b[1] - a[1])
       .map(([name, skins]) => ({ name, skins }));
 
-    setSeasonSkins(sorted);
+    setSeasonSkinsFull(toSorted(fullCounts));
+    setSeasonSkinsHalf(toSorted(halfCounts));
   }
 
   async function loadRound(roundId) {
@@ -138,36 +142,42 @@ export default function SkinsGame() {
 
   return (
     <div>
-      {/* Season Skins Leaderboard */}
-      {seasonSkins.length > 0 && (
-        <div className="card border-0 shadow-sm mb-4 border-matador">
-          <div className="card-header bg-matador-red text-white">
-            <h5 className="mb-0"><i className="bi bi-trophy-fill me-2"></i>Season Skins Leaderboard</h5>
-          </div>
-          <div className="card-body p-0">
-            <table className="table table-hover mb-0">
-              <thead className="bg-matador-black text-white">
-                <tr><th>Rank</th><th>Player</th><th className="text-center">Total Skins</th></tr>
-              </thead>
-              <tbody>
-                {(showAllSkins ? seasonSkins : seasonSkins.slice(0, 3)).map((row, i) => (
-                  <tr key={row.name} className={i === 0 ? 'table-matador-success' : ''}>
-                    <td className="fw-bold">{i + 1}</td>
-                    <td>{row.name}</td>
-                    <td className="text-center"><span className="badge badge-matador">{row.skins}</span></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {seasonSkins.length > 3 && (
-              <div className="text-center py-2 border-top">
-                <button className="btn btn-sm btn-link text-muted" onClick={() => setShowAllSkins(s => !s)}>
-                  <i className={`bi bi-chevron-${showAllSkins ? 'up' : 'down'} me-1`}></i>
-                  {showAllSkins ? 'Show less' : `Show all ${seasonSkins.length} players`}
-                </button>
+      {/* Season Skins Leaderboards */}
+      {(seasonSkinsFull.length > 0 || seasonSkinsHalf.length > 0) && (
+        <div className="row g-3 mb-4">
+          {[{ label: 'Full Handicap', data: seasonSkinsFull }, { label: 'Half Handicap', data: seasonSkinsHalf }].map(({ label, data }) => (
+            <div className="col-12 col-md-6" key={label}>
+              <div className="card border-0 shadow-sm h-100 border-matador">
+                <div className="card-header bg-matador-red text-white">
+                  <h6 className="mb-0"><i className="bi bi-trophy-fill me-2"></i>Season Skins — {label}</h6>
+                </div>
+                <div className="card-body p-0">
+                  <table className="table table-hover mb-0">
+                    <thead className="bg-matador-black text-white">
+                      <tr><th>Rank</th><th>Player</th><th className="text-center">Skins</th></tr>
+                    </thead>
+                    <tbody>
+                      {(showAllSkins ? data : data.slice(0, 3)).map((row, i) => (
+                        <tr key={row.name} className={i === 0 ? 'table-matador-success' : ''}>
+                          <td className="fw-bold">{i + 1}</td>
+                          <td>{row.name}</td>
+                          <td className="text-center"><span className="badge badge-matador">{row.skins}</span></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {data.length > 3 && (
+                    <div className="text-center py-2 border-top">
+                      <button className="btn btn-sm btn-link text-muted" onClick={() => setShowAllSkins(s => !s)}>
+                        <i className={`bi bi-chevron-${showAllSkins ? 'up' : 'down'} me-1`}></i>
+                        {showAllSkins ? 'Show less' : `Show all ${data.length} players`}
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
-            )}
-          </div>
+            </div>
+          ))}
         </div>
       )}
 
