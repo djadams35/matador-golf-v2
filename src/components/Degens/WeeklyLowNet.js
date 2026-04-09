@@ -126,7 +126,7 @@ export default function WeeklyLowNet() {
               {' — '}{round.holes === 'front' ? 'Front 9' : 'Back 9'}
             </span>
             <span className="badge bg-light text-dark">
-              Winner: {round.winner}
+              {round.winners.length > 1 ? `Tie: ${round.winners.map(w => w.name).join(', ')}` : `Winner: ${round.winner}`}
             </span>
           </div>
           <div className="card-body p-0">
@@ -136,16 +136,19 @@ export default function WeeklyLowNet() {
                   <tr><th>Player</th><th className="text-center">Net Total</th><th className="text-center">Gross Total</th></tr>
                 </thead>
                 <tbody>
-                  {round.sorted.map(p => (
-                    <tr key={p.name} className={round.winner === p.name ? 'table-matador-success' : ''}>
+                  {round.sorted.map(p => {
+                    const isWinner = round.winners.some(w => w.name === p.name);
+                    return (
+                    <tr key={p.name} className={isWinner ? 'table-matador-success' : ''}>
                       <td className="fw-semibold">
                         {p.name}
-                        {round.winner === p.name && <span className="badge badge-matador ms-2">Low Net</span>}
+                        {isWinner && <span className="badge badge-matador ms-2">{round.winners.length > 1 ? 'Tie' : 'Low Net'}</span>}
                       </td>
                       <td className="text-center fw-bold">{p.net}</td>
                       <td className="text-center text-muted">{p.gross}</td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

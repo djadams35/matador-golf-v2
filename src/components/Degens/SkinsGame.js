@@ -14,7 +14,7 @@ export default function SkinsGame() {
   // Also supports ad-hoc CSV upload (for quick use outside of saved rounds)
   const [csvMode, setCsvMode] = useState(false);
   const [dragActive, setDragActive] = useState(false);
-  const [handicapType, setHandicapType] = useState('half'); // 'half' or 'full'
+  const [handicapType, setHandicapType] = useState('full'); // 'full' or 'half'
 
   useEffect(() => { fetchRounds(); }, []);
 
