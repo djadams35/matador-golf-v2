@@ -20,23 +20,33 @@ export function getHoleHandicaps(section) {
 }
 
 /**
- * How many strokes does a player receive on a given hole?
+ * How many strokes does a player receive (or give) on a given hole?
  *
- * Rule: a player with handicap N receives 1 stroke on every hole whose
- * stroke index is <= N.  If the handicap is a half (e.g. 7.5) they receive
- * a stroke on holes with index <= ceil(7.5) = 8.
+ * Positive handicap: receives 1 stroke on holes with SI <= handicap.
+ * Negative handicap (plus handicap, stored as e.g. -1 for a +1 player):
+ *   gives 1 stroke on holes with SI <= abs(handicap), returned as -1.
  *
  * Used for SKINS (half handicap) and MATCH PLAY / LOW NET (full handicap).
  *
- * @param {number} handicap       - The player's handicap (may be fractional for skins)
- * @param {number} holeStrokeIndex - The hole's stroke index (1–18)
- * @returns {number} 0 or 1
+ * @param {number} handicap        - The player's handicap (negative = plus handicap)
+ * @param {number} holeStrokeIndex - The hole's stroke index (1–9)
+ * @returns {number} -1, 0, or 1
  */
 export function strokesReceived(handicap, holeStrokeIndex) {
-  if (handicap % 1 !== 0) {
-    return holeStrokeIndex <= Math.ceil(handicap) ? 1 : 0;
-  }
-  return holeStrokeIndex <= handicap ? 1 : 0;
+  const abs = Math.abs(handicap);
+  const threshold = abs % 1 !== 0 ? Math.ceil(abs) : abs;
+  if (holeStrokeIndex > threshold) return 0;
+  return handicap >= 0 ? 1 : -1;
+}
+
+/**
+ * Format a handicap for display: negative values (plus handicaps) show as "+N".
+ * @param {number} handicap
+ * @returns {string}
+ */
+export function formatHandicap(handicap) {
+  if (handicap === null || handicap === undefined) return '';
+  return handicap < 0 ? `+${Math.abs(handicap)}` : String(handicap);
 }
 
 /**

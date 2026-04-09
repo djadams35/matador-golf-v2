@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
 import { calculateSkins } from '../../utils/skinsCalculator';
-import { getHoleHandicaps } from '../../utils/handicapUtils';
+import { getHoleHandicaps, formatHandicap } from '../../utils/handicapUtils';
 
 export default function SkinsGame() {
   const [rounds, setRounds] = useState([]);
@@ -245,7 +245,7 @@ export default function SkinsGame() {
                     {players.map(player => (
                       <tr key={player.name}>
                         <td className="fw-bold">{player.name}</td>
-                        <td className="text-center">{handicapType === 'half' ? player.halfHandicap : player.fullHandicap}</td>
+                        <td className="text-center">{formatHandicap(handicapType === 'half' ? player.halfHandicap : player.fullHandicap)}</td>
                         {[...Array(9)].map((_, i) => {
                           const holeNumber = section === 'front' ? i + 1 : i + 10;
                           const result = skinsResults[holeNumber];
@@ -253,7 +253,7 @@ export default function SkinsGame() {
                           return (
                             <td key={holeNumber} className={`text-center ${result?.winner === player.name ? 'table-matador-success' : ''}`}>
                               <div className="fw-bold">{score?.net}</div>
-                              <small className="text-muted">({score?.gross}{score?.strokes > 0 ? `-${score.strokes}` : ''})</small>
+                              <small className="text-muted">({score?.gross}{score?.strokes > 0 ? `-${score.strokes}` : score?.strokes < 0 ? `+${Math.abs(score.strokes)}` : ''})</small>
                             </td>
                           );
                         })}

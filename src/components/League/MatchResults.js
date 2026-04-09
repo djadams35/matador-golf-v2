@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
-import { strokesReceived, getHoleHandicaps } from '../../utils/handicapUtils';
+import { strokesReceived, getHoleHandicaps, formatHandicap } from '../../utils/handicapUtils';
 
 function HoleTable({ playerA, playerB, scoreMap, section, aTeamName, bTeamName }) {
   const holeHandicaps = getHoleHandicaps(section);
@@ -40,11 +40,11 @@ function HoleTable({ playerA, playerB, scoreMap, section, aTeamName, bTeamName }
             <th className="text-center text-muted">Hole HC</th>
             <th className="text-center">
               {playerA}
-              {aHandicap !== null && <div className="fw-normal text-muted small">HC {aHandicap}</div>}
+              {aHandicap !== null && <div className="fw-normal text-muted small">HC {formatHandicap(aHandicap)}</div>}
             </th>
             <th className="text-center">
               {playerB}
-              {bHandicap !== null && <div className="fw-normal text-muted small">HC {bHandicap}</div>}
+              {bHandicap !== null && <div className="fw-normal text-muted small">HC {formatHandicap(bHandicap)}</div>}
             </th>
             <th className="text-center">Result</th>
             <th className="text-center">Match</th>
@@ -217,7 +217,7 @@ export default function MatchResults() {
                   <tr>
                     <td className="fw-semibold text-nowrap">Low HC Match</td>
                     <td className="small">
-                      {low.playerA}{details?.scoreMap[low.playerA] ? ` (HC ${Object.values(details.scoreMap[low.playerA])[0]?.fullHandicap})` : ''} vs {low.playerB}{details?.scoreMap[low.playerB] ? ` (HC ${Object.values(details.scoreMap[low.playerB])[0]?.fullHandicap})` : ''}
+                      {low.playerA}{details?.scoreMap[low.playerA] ? ` (HC ${formatHandicap(Object.values(details.scoreMap[low.playerA])[0]?.fullHandicap)})` : ''} vs {low.playerB}{details?.scoreMap[low.playerB] ? ` (HC ${formatHandicap(Object.values(details.scoreMap[low.playerB])[0]?.fullHandicap)})` : ''}
                     </td>
                     <td className="text-center">
                       <span className={`badge ${low.winner === 'A' ? 'badge-matador' : low.winner === 'B' ? 'bg-primary' : 'bg-warning text-dark'}`}>
@@ -230,7 +230,7 @@ export default function MatchResults() {
                   <tr>
                     <td className="fw-semibold text-nowrap">High HC Match</td>
                     <td className="small">
-                      {high.playerA}{details?.scoreMap[high.playerA] ? ` (HC ${Object.values(details.scoreMap[high.playerA])[0]?.fullHandicap})` : ''} vs {high.playerB}{details?.scoreMap[high.playerB] ? ` (HC ${Object.values(details.scoreMap[high.playerB])[0]?.fullHandicap})` : ''}
+                      {high.playerA}{details?.scoreMap[high.playerA] ? ` (HC ${formatHandicap(Object.values(details.scoreMap[high.playerA])[0]?.fullHandicap)})` : ''} vs {high.playerB}{details?.scoreMap[high.playerB] ? ` (HC ${formatHandicap(Object.values(details.scoreMap[high.playerB])[0]?.fullHandicap)})` : ''}
                     </td>
                     <td className="text-center">
                       <span className={`badge ${high.winner === 'A' ? 'badge-matador' : high.winner === 'B' ? 'bg-primary' : 'bg-warning text-dark'}`}>
