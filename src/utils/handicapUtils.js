@@ -1,10 +1,15 @@
 // ─── Course handicap stroke index arrays ────────────────────────────────────
-// These are fixed for this course and must never be changed.
-// The stroke index tells you which holes are "harder" for handicap purposes.
+// These are 9-hole stroke indexes (1–9) derived from the course's 18-hole
+// stroke indexes. Handicaps in the CSV are already 9-hole handicaps, so
+// strokes are allocated across 9 holes using these 1–9 SI values.
+//
+// Conversion: front 18-hole even SIs ÷ 2, back 18-hole odd SIs (+ 1) ÷ 2.
+// Original 18-hole front: [4,14,16,2,18,8,6,12,10]
+// Original 18-hole back:  [5,7,17,1,13,11,15,9,3]
 // Hole index 0 = first hole played (hole 1 on front, hole 10 on back).
 
-export const FRONT_NINE_HANDICAPS = [4, 14, 16, 2, 18, 8, 6, 12, 10];
-export const BACK_NINE_HANDICAPS  = [5,  7, 17, 1, 13, 11, 15,  9,  3];
+export const FRONT_NINE_HANDICAPS = [2, 7, 8, 1, 9, 4, 3, 6, 5];
+export const BACK_NINE_HANDICAPS  = [3, 4, 9, 1, 7, 6, 8, 5, 2];
 
 /**
  * Returns the handicap stroke index array for the given section.
