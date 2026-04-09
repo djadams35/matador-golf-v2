@@ -80,6 +80,9 @@ function HoleTable({ playerA, playerB, scoreMap, section, aTeamName, bTeamName }
             );
           })}
         </tbody>
+        <caption className="caption-top pt-2 pb-1 text-muted small">
+          <span className="text-danger me-1">●</span> Player receives a stroke on this hole &nbsp;·&nbsp; Score format: Gross (Net)
+        </caption>
         <tfoot>
           <tr className="table-dark">
             <td colSpan={4} className="fw-bold">
