@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
-import { getHoleHandicaps, strokesReceived } from '../../utils/handicapUtils';
+import { getHoleHandicaps } from '../../utils/handicapUtils';
 
 export default function PlayerLeaderboards() {
   const [data, setData] = useState(null);
@@ -26,8 +26,6 @@ export default function PlayerLeaderboards() {
       const section = row.rounds.holes_played;
       const holeHandicaps = getHoleHandicaps(section);
       const holeIndex = section === 'front' ? row.hole_number - 1 : row.hole_number - 10;
-      const si = holeHandicaps[holeIndex];
-      const net = row.gross_score - strokesReceived(row.full_handicap, si);
       const parScores = row.rounds.par_scores;
       const par = parScores ? parScores[holeIndex] : null;
 
