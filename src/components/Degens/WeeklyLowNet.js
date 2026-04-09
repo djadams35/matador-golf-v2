@@ -17,7 +17,17 @@ export default function WeeklyLowNet() {
       .select('player_id, players(name)')
       .eq('active', true);
 
-    const degenIds = (degensData || []).map(d => d.player_id);
+    // Get permanent roster players (no subs)
+    const { data: rosterData } = await supabase
+      .from('team_players')
+      .select('player_id')
+      .eq('is_sub', false);
+
+    const rosterIds = new Set((rosterData || []).map(r => r.player_id));
+
+    const degenIds = (degensData || [])
+      .filter(d => rosterIds.has(d.player_id))
+      .map(d => d.player_id);
     const degenNames = {};
     (degensData || []).forEach(d => { degenNames[d.player_id] = d.players?.name; });
 
