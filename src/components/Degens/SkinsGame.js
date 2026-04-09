@@ -14,7 +14,9 @@ export default function SkinsGame() {
 
   const [handicapType, setHandicapType] = useState('full'); // 'full' or 'half'
 
-  useEffect(() => { fetchRounds(); fetchSeasonSkins(); }, []); // eslint-disable-line
+  useEffect(() => { fetchRounds(); }, []); // eslint-disable-line
+
+  useEffect(() => { calculateSeasonSkins(handicapType); }, [handicapType]); // eslint-disable-line
 
   async function fetchRounds() {
     setLoading(true);
@@ -25,26 +27,53 @@ export default function SkinsGame() {
     const roundList = data || [];
     setRounds(roundList);
     setLoading(false);
-    // Auto-load the most recent round
     if (roundList.length > 0) {
       loadRound(roundList[0].id);
     }
   }
 
-  async function fetchSeasonSkins() {
-    const { data } = await supabase
-      .from('skins_results')
-      .select('winner_name')
-      .not('winner_name', 'is', null);
+  async function calculateSeasonSkins(hdcpType) {
+    const { data: scores } = await supabase
+      .from('player_scores')
+      .select('round_id, hole_number, gross_score, full_handicap, players(name), rounds(holes_played)');
 
-    if (!data) return;
+    if (!scores) return;
 
-    const counts = {};
-    data.forEach(row => {
-      counts[row.winner_name] = (counts[row.winner_name] || 0) + 1;
+    const roundMap = {};
+    scores.forEach(s => {
+      if (!s.players || !s.rounds) return;
+      const roundId = s.round_id;
+      if (!roundMap[roundId]) {
+        roundMap[roundId] = { section: s.rounds.holes_played, playerMap: {} };
+      }
+      const name = s.players.name;
+      if (!roundMap[roundId].playerMap[name]) {
+        roundMap[roundId].playerMap[name] = {
+          name,
+          fullHandicap: s.full_handicap,
+          halfHandicap: s.full_handicap / 2,
+          scores: [],
+          originalIndex: Object.keys(roundMap[roundId].playerMap).length,
+        };
+      }
+      roundMap[roundId].playerMap[name].scores.push({ hole: s.hole_number, gross: s.gross_score });
     });
 
-    const sorted = Object.entries(counts)
+    const winCounts = {};
+    Object.values(roundMap).forEach(round => {
+      const playerList = Object.values(round.playerMap).map(p => ({
+        ...p,
+        scores: p.scores.sort((a, b) => a.hole - b.hole).map(s => s.gross),
+      }));
+      const skins = calculateSkins(playerList, round.section, hdcpType);
+      Object.values(skins).forEach(result => {
+        if (result.winner !== 'No Winner') {
+          winCounts[result.winner] = (winCounts[result.winner] || 0) + 1;
+        }
+      });
+    });
+
+    const sorted = Object.entries(winCounts)
       .sort((a, b) => b[1] - a[1])
       .map(([name, skins]) => ({ name, skins }));
 
