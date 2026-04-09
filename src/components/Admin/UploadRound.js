@@ -3,7 +3,6 @@ import { supabase } from '../../supabaseClient';
 import { parseRoundCSV } from '../../utils/csvParser';
 import { calculateSkins } from '../../utils/skinsCalculator';
 import { calculateMatchPlay } from '../../utils/matchPlayCalculator';
-import { getHoleHandicaps } from '../../utils/handicapUtils';
 
 export default function UploadRound() {
   const [dragActive, setDragActive] = useState(false);
@@ -136,7 +135,6 @@ export default function UploadRound() {
       if (skinsError) throw new Error('Skins insert failed: ' + skinsError.message);
 
       // ── 6. Calculate and save weekly low net (Degens) ─────────────────────
-      const holeHandicaps = getHoleHandicaps(section);
       const degenRows = players.map(p => {
         const grossTotal = p.scores.reduce((a, b) => a + b, 0);
         return {
