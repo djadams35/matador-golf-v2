@@ -22,8 +22,13 @@ export default function SkinsGame() {
       .from('rounds')
       .select('id, file_name, played_date, holes_played, week_number')
       .order('played_date', { ascending: false });
-    setRounds(data || []);
+    const roundList = data || [];
+    setRounds(roundList);
     setLoading(false);
+    // Auto-load the most recent round
+    if (roundList.length > 0) {
+      loadRound(roundList[0].id);
+    }
   }
 
   async function fetchSeasonSkins() {
@@ -151,7 +156,7 @@ export default function SkinsGame() {
       <div className="mb-4">
         <label className="form-label fw-semibold">Select a round:</label>
         {loading ? <div className="spinner-border spinner-border-sm text-matador-red ms-2"></div> : (
-          <select className="form-select" onChange={e => loadRound(e.target.value)} defaultValue="">
+          <select className="form-select" onChange={e => loadRound(e.target.value)} value={selectedRound || ''}>
             <option value="">-- Choose a round --</option>
             {rounds.map(r => (
               <option key={r.id} value={r.id}>
