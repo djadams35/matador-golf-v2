@@ -1,9 +1,63 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
+import { strokesReceived, getHoleHandicaps } from '../../utils/handicapUtils';
+
+function HoleTable({ playerA, playerB, scoreMap, section, aTeamName, bTeamName }) {
+  const holeHandicaps = getHoleHandicaps(section);
+
+  return (
+    <div className="table-responsive">
+      <table className="table table-sm mb-0">
+        <thead className="table-light">
+          <tr>
+            <th>Hole</th>
+            <th className="text-center text-muted">SI</th>
+            <th className="text-center">{playerA}</th>
+            <th className="text-center">{playerB}</th>
+            <th className="text-center">Result</th>
+          </tr>
+        </thead>
+        <tbody>
+          {[...Array(9)].map((_, i) => {
+            const holeNumber = section === 'front' ? i + 1 : i + 10;
+            const si = holeHandicaps[i];
+            const aScore = scoreMap[playerA]?.[i];
+            const bScore = scoreMap[playerB]?.[i];
+            const aNet = aScore != null ? aScore.gross - strokesReceived(aScore.fullHandicap, si) : null;
+            const bNet = bScore != null ? bScore.gross - strokesReceived(bScore.fullHandicap, si) : null;
+            const winner = aNet !== null && bNet !== null
+              ? aNet < bNet ? 'A' : bNet < aNet ? 'B' : 'tie'
+              : null;
+
+            return (
+              <tr key={holeNumber}>
+                <td className="fw-semibold">{holeNumber}</td>
+                <td className="text-center text-muted small">{si}</td>
+                <td className={`text-center ${winner === 'A' ? 'fw-bold table-success' : ''}`}>
+                  {aScore != null ? `${aScore.gross} (${aNet})` : '—'}
+                </td>
+                <td className={`text-center ${winner === 'B' ? 'fw-bold table-success' : ''}`}>
+                  {bScore != null ? `${bScore.gross} (${bNet})` : '—'}
+                </td>
+                <td className="text-center">
+                  {winner === 'A' && <span className="badge badge-matador">{aTeamName}</span>}
+                  {winner === 'B' && <span className="badge bg-secondary">{bTeamName}</span>}
+                  {winner === 'tie' && <span className="text-muted small">Tied</span>}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 export default function MatchResults() {
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState({});
+  const [loadingDetails, setLoadingDetails] = useState({});
 
   useEffect(() => { fetchResults(); }, []);
 
@@ -18,9 +72,54 @@ export default function MatchResults() {
         rounds(played_date, holes_played)
       `)
       .order('week_number', { ascending: false });
-
     if (!error) setResults(data || []);
     setLoading(false);
+  }
+
+  async function toggleDetails(result) {
+    if (expanded[result.id]) {
+      setExpanded(prev => { const n = { ...prev }; delete n[result.id]; return n; });
+      return;
+    }
+
+    setLoadingDetails(prev => ({ ...prev, [result.id]: true }));
+
+    const section = result.rounds?.holes_played || 'front';
+    const low = result.low_match_detail || {};
+    const high = result.high_match_detail || {};
+    const playerNames = [low.playerA, low.playerB, high.playerA, high.playerB].filter(Boolean);
+
+    const { data: playerRows } = await supabase
+      .from('players')
+      .select('id, name')
+      .in('name', playerNames);
+
+    if (!playerRows) {
+      setLoadingDetails(prev => ({ ...prev, [result.id]: false }));
+      return;
+    }
+
+    const playerIdToName = {};
+    playerRows.forEach(p => { playerIdToName[p.id] = p.name; });
+    const playerIds = playerRows.map(p => p.id);
+
+    const { data: scores } = await supabase
+      .from('player_scores')
+      .select('player_id, hole_number, gross_score, full_handicap')
+      .eq('round_id', result.round_id)
+      .in('player_id', playerIds);
+
+    const scoreMap = {};
+    (scores || []).forEach(s => {
+      const name = playerIdToName[s.player_id];
+      if (!name) return;
+      if (!scoreMap[name]) scoreMap[name] = {};
+      const holeIndex = section === 'front' ? s.hole_number - 1 : s.hole_number - 10;
+      scoreMap[name][holeIndex] = { gross: s.gross_score, fullHandicap: s.full_handicap };
+    });
+
+    setExpanded(prev => ({ ...prev, [result.id]: { scoreMap, section } }));
+    setLoadingDetails(prev => ({ ...prev, [result.id]: false }));
   }
 
   if (loading) return <div className="text-center py-5"><span className="spinner-border text-matador-red"></span></div>;
@@ -34,6 +133,8 @@ export default function MatchResults() {
         const team = r.team_point_detail || {};
         const aName = r.team_a?.name;
         const bName = r.team_b?.name;
+        const details = expanded[r.id];
+        const isLoadingDetail = loadingDetails[r.id];
 
         return (
           <div className="card border-0 shadow-sm mb-3" key={r.id}>
@@ -94,6 +195,37 @@ export default function MatchResults() {
                   </tr>
                 </tbody>
               </table>
+
+              <button
+                className="btn btn-sm btn-outline-secondary mt-3 w-100"
+                onClick={() => toggleDetails(r)}
+              >
+                {isLoadingDetail
+                  ? <span className="spinner-border spinner-border-sm me-1"></span>
+                  : <i className={`bi bi-chevron-${details ? 'up' : 'down'} me-1`}></i>}
+                {details ? 'Hide' : 'View'} Hole by Hole
+              </button>
+
+              {details && (
+                <div className="mt-3">
+                  <div className="fw-semibold small text-muted mb-1 text-uppercase">
+                    Low HC — {low.playerA} vs {low.playerB}
+                  </div>
+                  <HoleTable
+                    playerA={low.playerA} playerB={low.playerB}
+                    scoreMap={details.scoreMap} section={details.section}
+                    aTeamName={aName} bTeamName={bName}
+                  />
+                  <div className="fw-semibold small text-muted mb-1 mt-3 text-uppercase">
+                    High HC — {high.playerA} vs {high.playerB}
+                  </div>
+                  <HoleTable
+                    playerA={high.playerA} playerB={high.playerB}
+                    scoreMap={details.scoreMap} section={details.section}
+                    aTeamName={aName} bTeamName={bName}
+                  />
+                </div>
+              )}
             </div>
           </div>
         );
