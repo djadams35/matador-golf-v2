@@ -11,15 +11,13 @@ export default function PlayerLeaderboards() {
   async function fetchData() {
     setLoading(true);
 
-    // Get all scores with player and round info
     const { data: scores } = await supabase
       .from('player_scores')
-      .select('player_id, hole_number, gross_score, full_handicap, players(name), rounds(holes_played, played_date)')
+      .select('player_id, hole_number, gross_score, full_handicap, players(name), rounds(holes_played, played_date, par_scores)')
       .order('rounds(played_date)');
 
     if (!scores) { setLoading(false); return; }
 
-    // Build per-player stats
     const playerStats = {};
 
     scores.forEach(row => {
@@ -30,30 +28,31 @@ export default function PlayerLeaderboards() {
       const holeIndex = section === 'front' ? row.hole_number - 1 : row.hole_number - 10;
       const si = holeHandicaps[holeIndex];
       const net = row.gross_score - strokesReceived(row.full_handicap, si);
+      const parScores = row.rounds.par_scores;
+      const par = parScores ? parScores[holeIndex] : null;
 
       if (!playerStats[name]) {
         playerStats[name] = {
           name,
           rounds: 0,
-          grossScores: [],   // total gross per round
-          netScores: [],     // total net per round
-          eagles: { gross: 0, net: 0 },
-          birdies: { gross: 0, net: 0 },
-          pars: { gross: 0, net: 0 },
+          grossScores: [],
+          netScores: [],
+          eagles: 0,
+          birdies: 0,
+          pars: 0,
           bestGross: null,
           bestNet: null,
-          holeScores: [],    // for per-hole tracking
         };
       }
 
-      // We need par per hole — get from parsRow... but we don't store it.
-      // Golf League Guru CSVs include a pars row; we'll use standard par values.
-      // For now we track eagles/birdies/pars relative to a fixed par of 4 for unknown holes.
-      // This will be improved when we store the pars row in the DB.
-      playerStats[name].holeScores.push({ gross: row.gross_score, net, section, holeIndex });
+      if (par !== null) {
+        const diff = row.gross_score - par;
+        if (diff <= -2) playerStats[name].eagles++;
+        else if (diff === -1) playerStats[name].birdies++;
+        else if (diff === 0) playerStats[name].pars++;
+      }
     });
 
-    // For gross/net totals per round, aggregate from round_net_totals
     const { data: netTotals } = await supabase
       .from('round_net_totals')
       .select('player_id, net_total, gross_total, players(name)');
@@ -70,7 +69,6 @@ export default function PlayerLeaderboards() {
       });
     }
 
-    // Compute best and average
     Object.values(playerStats).forEach(p => {
       if (p.grossScores.length > 0) {
         p.bestGross = Math.min(...p.grossScores);
@@ -91,12 +89,15 @@ export default function PlayerLeaderboards() {
   const byBestNet   = [...data].filter(p => p.bestNet !== null).sort((a, b) => a.bestNet - b.bestNet);
   const byAvgGross  = [...data].filter(p => p.avgGross).sort((a, b) => parseFloat(a.avgGross) - parseFloat(b.avgGross));
   const byAvgNet    = [...data].filter(p => p.avgNet).sort((a, b) => parseFloat(a.avgNet) - parseFloat(b.avgNet));
+  const byEagles    = [...data].filter(p => p.eagles > 0).sort((a, b) => b.eagles - a.eagles);
+  const byBirdies   = [...data].filter(p => p.birdies > 0).sort((a, b) => b.birdies - a.birdies);
+  const byPars      = [...data].filter(p => p.pars > 0).sort((a, b) => b.pars - a.pars);
 
-  function LeaderTable({ title, rows, valueKey, label }) {
+  function LeaderTable({ title, rows, valueKey, label, icon }) {
     return (
       <div className="card border-0 shadow-sm mb-4">
         <div className="card-header bg-matador-black text-white">
-          <h6 className="mb-0">{title}</h6>
+          <h6 className="mb-0">{icon && <i className={`bi ${icon} me-2`}></i>}{title}</h6>
         </div>
         <div className="card-body p-0">
           <table className="table table-hover mb-0">
@@ -104,13 +105,16 @@ export default function PlayerLeaderboards() {
               <tr><th>#</th><th>Player</th><th className="text-center">{label}</th></tr>
             </thead>
             <tbody>
-              {rows.slice(0, 10).map((p, i) => (
-                <tr key={p.name} className={i === 0 ? 'table-matador-success' : ''}>
-                  <td>{i + 1}</td>
-                  <td className="fw-semibold">{p.name}</td>
-                  <td className="text-center fw-bold">{p[valueKey]}</td>
-                </tr>
-              ))}
+              {rows.length === 0
+                ? <tr><td colSpan={3} className="text-muted text-center py-3">No data yet</td></tr>
+                : rows.slice(0, 10).map((p, i) => (
+                  <tr key={p.name} className={i === 0 ? 'table-matador-success' : ''}>
+                    <td>{i + 1}</td>
+                    <td className="fw-semibold">{p.name}</td>
+                    <td className="text-center fw-bold">{p[valueKey]}</td>
+                  </tr>
+                ))
+              }
             </tbody>
           </table>
         </div>
@@ -135,9 +139,17 @@ export default function PlayerLeaderboards() {
         </div>
       </div>
 
-      <div className="alert alert-info small">
-        <i className="bi bi-info-circle me-1"></i>
-        Eagles, birdies, and pars leaderboard coming in a future update (requires storing par values per hole from the CSV).
+      <h6 className="fw-bold mb-3 text-matador-red"><i className="bi bi-flag-fill me-2"></i>Scoring Highlights</h6>
+      <div className="row g-4">
+        <div className="col-12 col-md-4">
+          <LeaderTable title="Eagles" rows={byEagles} valueKey="eagles" label="Eagles" icon="bi-star-fill" />
+        </div>
+        <div className="col-12 col-md-4">
+          <LeaderTable title="Birdies" rows={byBirdies} valueKey="birdies" label="Birdies" icon="bi-arrow-down-circle-fill" />
+        </div>
+        <div className="col-12 col-md-4">
+          <LeaderTable title="Pars" rows={byPars} valueKey="pars" label="Pars" icon="bi-check-circle-fill" />
+        </div>
       </div>
     </div>
   );

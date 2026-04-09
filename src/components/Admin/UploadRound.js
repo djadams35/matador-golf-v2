@@ -103,7 +103,7 @@ export default function UploadRound() {
     setStatus({ type: 'info', message: 'Saving...' });
 
     try {
-      const { file, section, players } = parsed;
+      const { file, section, players, parScores } = parsed;
 
       // ── 1. Upload raw CSV to Supabase Storage ─────────────────────────────
       const storagePath = `rounds/${file.name}`;
@@ -144,6 +144,7 @@ export default function UploadRound() {
           holes_played: section,
           played_date: roundDate || null,
           week_number: weekOverride ? parseInt(weekOverride) : null,
+          par_scores: parScores || null,
         })
         .select()
         .single();
