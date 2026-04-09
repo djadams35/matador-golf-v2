@@ -10,6 +10,8 @@ function HoleTable({ playerA, playerB, scoreMap, section, aTeamName, bTeamName }
 
   const aFirstName = playerA ? playerA.split(' ')[0] : '';
   const bFirstName = playerB ? playerB.split(' ')[0] : '';
+  const aHandicap = scoreMap[playerA] ? Object.values(scoreMap[playerA])[0]?.fullHandicap : null;
+  const bHandicap = scoreMap[playerB] ? Object.values(scoreMap[playerB])[0]?.fullHandicap : null;
 
   const holes = [...Array(9)].map((_, i) => {
     const holeNumber = section === 'front' ? i + 1 : i + 10;
@@ -36,8 +38,14 @@ function HoleTable({ playerA, playerB, scoreMap, section, aTeamName, bTeamName }
           <tr>
             <th>Hole</th>
             <th className="text-center text-muted">Hole HC</th>
-            <th className="text-center">{playerA}</th>
-            <th className="text-center">{playerB}</th>
+            <th className="text-center">
+              {playerA}
+              {aHandicap !== null && <div className="fw-normal text-muted small">HC {aHandicap}</div>}
+            </th>
+            <th className="text-center">
+              {playerB}
+              {bHandicap !== null && <div className="fw-normal text-muted small">HC {bHandicap}</div>}
+            </th>
             <th className="text-center">Result</th>
             <th className="text-center">Match</th>
           </tr>
@@ -205,7 +213,9 @@ export default function MatchResults() {
                 <tbody>
                   <tr>
                     <td className="fw-semibold text-nowrap">Low HC Match</td>
-                    <td className="small">{low.playerA} vs {low.playerB}</td>
+                    <td className="small">
+                      {low.playerA}{details?.scoreMap[low.playerA] ? ` (HC ${Object.values(details.scoreMap[low.playerA])[0]?.fullHandicap})` : ''} vs {low.playerB}{details?.scoreMap[low.playerB] ? ` (HC ${Object.values(details.scoreMap[low.playerB])[0]?.fullHandicap})` : ''}
+                    </td>
                     <td className="text-center">
                       <span className={`badge ${low.winner === 'A' ? 'badge-matador' : low.winner === 'B' ? 'bg-primary' : 'bg-warning text-dark'}`}>
                         {low.winner === 'A' ? low.playerA : low.winner === 'B' ? low.playerB : 'Tie'}
@@ -216,7 +226,9 @@ export default function MatchResults() {
                   </tr>
                   <tr>
                     <td className="fw-semibold text-nowrap">High HC Match</td>
-                    <td className="small">{high.playerA} vs {high.playerB}</td>
+                    <td className="small">
+                      {high.playerA}{details?.scoreMap[high.playerA] ? ` (HC ${Object.values(details.scoreMap[high.playerA])[0]?.fullHandicap})` : ''} vs {high.playerB}{details?.scoreMap[high.playerB] ? ` (HC ${Object.values(details.scoreMap[high.playerB])[0]?.fullHandicap})` : ''}
+                    </td>
                     <td className="text-center">
                       <span className={`badge ${high.winner === 'A' ? 'badge-matador' : high.winner === 'B' ? 'bg-primary' : 'bg-warning text-dark'}`}>
                         {high.winner === 'A' ? high.playerA : high.winner === 'B' ? high.playerB : 'Tie'}
