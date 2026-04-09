@@ -142,44 +142,42 @@ export default function SkinsGame() {
 
   return (
     <div>
-      {/* Season Skins Leaderboards */}
-      {(seasonSkinsFull.length > 0 || seasonSkinsHalf.length > 0) && (
-        <div className="row g-3 mb-4">
-          {[{ label: 'Full Handicap', data: seasonSkinsFull }, { label: 'Half Handicap', data: seasonSkinsHalf }].map(({ label, data }) => (
-            <div className="col-12 col-md-6" key={label}>
-              <div className="card border-0 shadow-sm h-100 border-matador">
-                <div className="card-header bg-matador-red text-white">
-                  <h6 className="mb-0"><i className="bi bi-trophy-fill me-2"></i>Season Skins — {label}</h6>
-                </div>
-                <div className="card-body p-0">
-                  <table className="table table-hover mb-0">
-                    <thead className="bg-matador-black text-white">
-                      <tr><th>Rank</th><th>Player</th><th className="text-center">Skins</th></tr>
-                    </thead>
-                    <tbody>
-                      {(showAllSkins ? data : data.slice(0, 3)).map((row, i) => (
-                        <tr key={row.name} className={i === 0 ? 'table-matador-success' : ''}>
-                          <td className="fw-bold">{i + 1}</td>
-                          <td>{row.name}</td>
-                          <td className="text-center"><span className="badge badge-matador">{row.skins}</span></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {data.length > 3 && (
-                    <div className="text-center py-2 border-top">
-                      <button className="btn btn-sm btn-link text-muted" onClick={() => setShowAllSkins(s => !s)}>
-                        <i className={`bi bi-chevron-${showAllSkins ? 'up' : 'down'} me-1`}></i>
-                        {showAllSkins ? 'Show less' : `Show all ${data.length} players`}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
+      {/* Season Skins Leaderboard */}
+      {(seasonSkinsFull.length > 0 || seasonSkinsHalf.length > 0) && (() => {
+        const data = handicapType === 'full' ? seasonSkinsFull : seasonSkinsHalf;
+        const label = handicapType === 'full' ? 'Full Handicap' : 'Half Handicap';
+        return (
+          <div className="card border-0 shadow-sm mb-4 border-matador">
+            <div className="card-header bg-matador-red text-white">
+              <h6 className="mb-0"><i className="bi bi-trophy-fill me-2"></i>Season Skins — {label}</h6>
             </div>
-          ))}
-        </div>
-      )}
+            <div className="card-body p-0">
+              <table className="table table-hover mb-0">
+                <thead className="bg-matador-black text-white">
+                  <tr><th>Rank</th><th>Player</th><th className="text-center">Skins</th></tr>
+                </thead>
+                <tbody>
+                  {(showAllSkins ? data : data.slice(0, 3)).map((row, i) => (
+                    <tr key={row.name} className={i === 0 ? 'table-matador-success' : ''}>
+                      <td className="fw-bold">{i + 1}</td>
+                      <td>{row.name}</td>
+                      <td className="text-center"><span className="badge badge-matador">{row.skins}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {data.length > 3 && (
+                <div className="text-center py-2 border-top">
+                  <button className="btn btn-sm btn-link text-muted" onClick={() => setShowAllSkins(s => !s)}>
+                    <i className={`bi bi-chevron-${showAllSkins ? 'up' : 'down'} me-1`}></i>
+                    {showAllSkins ? 'Show less' : `Show all ${data.length} players`}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       <div className="d-flex align-items-center justify-content-end gap-3 mb-4 flex-wrap">
         <div className="d-flex align-items-center gap-2">
