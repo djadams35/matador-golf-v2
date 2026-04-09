@@ -164,53 +164,57 @@ export default function UploadRound() {
   }
 
   async function calculateAndSaveMatchPlay(roundId, weekNumber, players, section, playerMap) {
-    // Look up the schedule for this week
-    const { data: schedule } = await supabase
+    // Get ALL matchups for this week (4 per week)
+    const { data: matchups } = await supabase
       .from('schedule')
       .select('*, team_a:teams!team_a_id(*), team_b:teams!team_b_id(*)')
-      .eq('week_number', weekNumber)
-      .single();
+      .eq('week_number', weekNumber);
 
-    if (!schedule) return; // No schedule entry — skip match play
+    if (!matchups || matchups.length === 0) return;
 
-    // Look up team rosters
+    // Get all team IDs involved this week
+    const teamIds = matchups.flatMap(m => [m.team_a_id, m.team_b_id]);
+
+    // Look up all rosters for those teams
     const { data: teamRosters } = await supabase
       .from('team_players')
       .select('team_id, player_id, players(name)')
-      .in('team_id', [schedule.team_a_id, schedule.team_b_id]);
+      .in('team_id', teamIds);
 
-    if (!teamRosters || teamRosters.length < 4) return;
+    if (!teamRosters) return;
 
     const buildTeam = (teamId) => {
-      const rosterPlayers = teamRosters
+      const rosterPlayers = (teamRosters || [])
         .filter(r => r.team_id === teamId)
         .map(r => players.find(p => p.name === r.players.name))
         .filter(Boolean);
       return { players: rosterPlayers };
     };
 
-    const teamA = buildTeam(schedule.team_a_id);
-    const teamB = buildTeam(schedule.team_b_id);
+    for (const matchup of matchups) {
+      const teamA = buildTeam(matchup.team_a_id);
+      const teamB = buildTeam(matchup.team_b_id);
 
-    if (teamA.players.length < 2 || teamB.players.length < 2) return;
+      if (teamA.players.length < 2 || teamB.players.length < 2) continue;
 
-    const result = calculateMatchPlay(teamA, teamB, section);
+      const result = calculateMatchPlay(teamA, teamB, section);
 
-    await supabase.from('match_results').insert({
-      round_id: roundId,
-      schedule_id: schedule.id,
-      week_number: weekNumber,
-      team_a_id: schedule.team_a_id,
-      team_b_id: schedule.team_b_id,
-      low_match_winner: result.lowMatch.winner === 'A' ? schedule.team_a_id : result.lowMatch.winner === 'B' ? schedule.team_b_id : null,
-      high_match_winner: result.highMatch.winner === 'A' ? schedule.team_a_id : result.highMatch.winner === 'B' ? schedule.team_b_id : null,
-      team_point_winner: result.teamPoint.winner === 'A' ? schedule.team_a_id : result.teamPoint.winner === 'B' ? schedule.team_b_id : null,
-      team_a_points: result.points.teamA,
-      team_b_points: result.points.teamB,
-      low_match_detail: result.lowMatch,
-      high_match_detail: result.highMatch,
-      team_point_detail: result.teamPoint,
-    });
+      await supabase.from('match_results').insert({
+        round_id: roundId,
+        schedule_id: matchup.id,
+        week_number: weekNumber,
+        team_a_id: matchup.team_a_id,
+        team_b_id: matchup.team_b_id,
+        low_match_winner: result.lowMatch.winner === 'A' ? matchup.team_a_id : result.lowMatch.winner === 'B' ? matchup.team_b_id : null,
+        high_match_winner: result.highMatch.winner === 'A' ? matchup.team_a_id : result.highMatch.winner === 'B' ? matchup.team_b_id : null,
+        team_point_winner: result.teamPoint.winner === 'A' ? matchup.team_a_id : result.teamPoint.winner === 'B' ? matchup.team_b_id : null,
+        team_a_points: result.points.teamA,
+        team_b_points: result.points.teamB,
+        low_match_detail: result.lowMatch,
+        high_match_detail: result.highMatch,
+        team_point_detail: result.teamPoint,
+      });
+    }
   }
 
   return (
