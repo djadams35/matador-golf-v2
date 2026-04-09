@@ -210,6 +210,7 @@ export default function MatchResults() {
                       <span className={`badge ${low.winner === 'A' ? 'badge-matador' : low.winner === 'B' ? 'bg-secondary' : 'bg-warning text-dark'}`}>
                         {low.winner === 'A' ? low.playerA : low.winner === 'B' ? low.playerB : 'Tie'}
                       </span>
+                      <span className="text-muted small ms-1">{low.winner === 'tie' ? '+0.5 each' : '+1'}</span>
                       <div className="text-muted small">{low.aHolesWon}–{low.bHolesWon} ({low.halved} tied)</div>
                     </td>
                   </tr>
@@ -220,6 +221,7 @@ export default function MatchResults() {
                       <span className={`badge ${high.winner === 'A' ? 'badge-matador' : high.winner === 'B' ? 'bg-secondary' : 'bg-warning text-dark'}`}>
                         {high.winner === 'A' ? high.playerA : high.winner === 'B' ? high.playerB : 'Tie'}
                       </span>
+                      <span className="text-muted small ms-1">{high.winner === 'tie' ? '+0.5 each' : '+1'}</span>
                       <div className="text-muted small">{high.aHolesWon}–{high.bHolesWon} ({high.halved} tied)</div>
                     </td>
                   </tr>
@@ -230,6 +232,7 @@ export default function MatchResults() {
                       <span className={`badge ${team.winner === 'A' ? 'badge-matador' : team.winner === 'B' ? 'bg-secondary' : 'bg-warning text-dark'}`}>
                         {team.winner === 'A' ? aName : team.winner === 'B' ? bName : 'Tie'}
                       </span>
+                      <span className="text-muted small ms-1">{team.winner === 'tie' ? '+0.5 each' : '+1'}</span>
                     </td>
                   </tr>
                 </tbody>
