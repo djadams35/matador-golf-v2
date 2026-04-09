@@ -5,6 +5,25 @@ import { strokesReceived, getHoleHandicaps } from '../../utils/handicapUtils';
 function HoleTable({ playerA, playerB, scoreMap, section, aTeamName, bTeamName }) {
   const holeHandicaps = getHoleHandicaps(section);
 
+  // Pre-calculate all hole results so we can build running score
+  let runningScore = 0; // positive = A leads, negative = B leads
+
+  const holes = [...Array(9)].map((_, i) => {
+    const holeNumber = section === 'front' ? i + 1 : i + 10;
+    const si = holeHandicaps[i];
+    const aScore = scoreMap[playerA]?.[i];
+    const bScore = scoreMap[playerB]?.[i];
+    const aNet = aScore != null ? aScore.gross - strokesReceived(aScore.fullHandicap, si) : null;
+    const bNet = bScore != null ? bScore.gross - strokesReceived(bScore.fullHandicap, si) : null;
+    const winner = aNet !== null && bNet !== null
+      ? aNet < bNet ? 'A' : bNet < aNet ? 'B' : 'tie'
+      : null;
+    if (winner === 'A') runningScore++;
+    else if (winner === 'B') runningScore--;
+    const snap = runningScore;
+    return { holeNumber, si, aScore, bScore, aNet, bNet, winner, runningScore: snap };
+  });
+
   return (
     <div className="table-responsive">
       <table className="table table-sm mb-0">
@@ -15,19 +34,14 @@ function HoleTable({ playerA, playerB, scoreMap, section, aTeamName, bTeamName }
             <th className="text-center">{playerA}</th>
             <th className="text-center">{playerB}</th>
             <th className="text-center">Result</th>
+            <th className="text-center">Match</th>
           </tr>
         </thead>
         <tbody>
-          {[...Array(9)].map((_, i) => {
-            const holeNumber = section === 'front' ? i + 1 : i + 10;
-            const si = holeHandicaps[i];
-            const aScore = scoreMap[playerA]?.[i];
-            const bScore = scoreMap[playerB]?.[i];
-            const aNet = aScore != null ? aScore.gross - strokesReceived(aScore.fullHandicap, si) : null;
-            const bNet = bScore != null ? bScore.gross - strokesReceived(bScore.fullHandicap, si) : null;
-            const winner = aNet !== null && bNet !== null
-              ? aNet < bNet ? 'A' : bNet < aNet ? 'B' : 'tie'
-              : null;
+          {holes.map(({ holeNumber, si, aScore, bScore, aNet, bNet, winner, runningScore: rs }) => {
+            const matchLabel = rs === 0 ? 'AS'
+              : rs > 0 ? `${rs} UP` : `${Math.abs(rs)} DN`;
+            const matchClass = rs > 0 ? 'text-success fw-bold' : rs < 0 ? 'text-danger fw-bold' : 'text-muted';
 
             return (
               <tr key={holeNumber}>
@@ -44,10 +58,26 @@ function HoleTable({ playerA, playerB, scoreMap, section, aTeamName, bTeamName }
                   {winner === 'B' && <span className="badge bg-secondary">{bTeamName}</span>}
                   {winner === 'tie' && <span className="text-muted small">Tied</span>}
                 </td>
+                <td className={`text-center small ${matchClass}`}>{matchLabel}</td>
               </tr>
             );
           })}
         </tbody>
+        <tfoot>
+          <tr className="table-dark">
+            <td colSpan={4} className="fw-bold">
+              {runningScore === 0
+                ? 'All Square'
+                : runningScore > 0
+                  ? <><span className="badge badge-matador me-2">{aTeamName} wins</span>{runningScore} UP</>
+                  : <><span className="badge bg-secondary me-2">{bTeamName} wins</span>{Math.abs(runningScore)} UP</>}
+            </td>
+            <td className="text-center fw-bold">Final</td>
+            <td className={`text-center fw-bold ${runningScore > 0 ? 'text-success' : runningScore < 0 ? 'text-danger' : 'text-muted'}`}>
+              {runningScore === 0 ? 'AS' : runningScore > 0 ? `${runningScore} UP` : `${Math.abs(runningScore)} DN`}
+            </td>
+          </tr>
+        </tfoot>
       </table>
     </div>
   );
