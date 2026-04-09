@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
 import { parseRoundCSV } from '../../utils/csvParser';
 import { calculateSkins } from '../../utils/skinsCalculator';
@@ -6,11 +6,20 @@ import { calculateMatchPlay } from '../../utils/matchPlayCalculator';
 
 export default function UploadRound() {
   const [dragActive, setDragActive] = useState(false);
-  const [status, setStatus] = useState(null); // { type: 'success'|'error'|'warning'|'info', message }
+  const [status, setStatus] = useState(null);
   const [uploading, setUploading] = useState(false);
-  const [parsed, setParsed] = useState(null); // preview before confirming
+  const [parsed, setParsed] = useState(null);
   const [weekOverride, setWeekOverride] = useState('');
   const [roundDate, setRoundDate] = useState('');
+  const [teams, setTeams] = useState([]);
+  const [subAssignments, setSubAssignments] = useState({}); // playerName -> teamId
+  const [unassignedPlayers, setUnassignedPlayers] = useState([]);
+
+  useEffect(() => {
+    supabase.from('teams').select('id, name').order('name').then(({ data }) => {
+      if (data) setTeams(data);
+    });
+  }, []);
 
   const handleFile = useCallback(async (file) => {
     if (!file || !file.name.endsWith('.csv')) {
@@ -20,7 +29,7 @@ export default function UploadRound() {
 
     setStatus({ type: 'info', message: 'Reading file...' });
 
-    // ── Step 1: Check for duplicate in Supabase Storage ──────────────────────
+    // Check for duplicate in Supabase Storage
     const { data: existing, error: listError } = await supabase.storage
       .from('round-csvs')
       .list('rounds', { search: file.name });
@@ -38,11 +47,33 @@ export default function UploadRound() {
       return;
     }
 
-    // ── Step 2: Parse the CSV ─────────────────────────────────────────────────
     try {
       const result = await parseRoundCSV(file);
+
+      // Find which players aren't on any team roster
+      const { data: allRosters } = await supabase
+        .from('team_players')
+        .select('player_id, players(name)');
+
+      const assignedNames = new Set(
+        (allRosters || []).map(r => r.players?.name).filter(Boolean)
+      );
+
+      const unassigned = result.players.filter(p => !assignedNames.has(p.name));
+      setUnassignedPlayers(unassigned);
+
+      // Pre-fill sub assignments with empty
+      const assignments = {};
+      unassigned.forEach(p => { assignments[p.name] = ''; });
+      setSubAssignments(assignments);
+
       setParsed({ file, ...result });
-      setStatus({ type: 'info', message: `Parsed ${result.players.length} players. Review below, then click "Save Round".` });
+      setStatus({
+        type: unassigned.length > 0 ? 'warning' : 'info',
+        message: unassigned.length > 0
+          ? `Parsed ${result.players.length} players. ${unassigned.length} player(s) are not on any team roster — assign them below before saving.`
+          : `Parsed ${result.players.length} players. Review below, then click "Save Round".`
+      });
     } catch (err) {
       setStatus({ type: 'error', message: err.message });
     }
@@ -81,7 +112,7 @@ export default function UploadRound() {
         .upload(storagePath, file);
       if (uploadError) throw new Error('Storage upload failed: ' + uploadError.message);
 
-      // ── 2. Upsert players into the players table ───────────────────────────
+      // ── 2. Upsert players ──────────────────────────────────────────────────
       const playerUpserts = players.map(p => ({ name: p.name }));
       const { data: upsertedPlayers, error: playerError } = await supabase
         .from('players')
@@ -92,7 +123,19 @@ export default function UploadRound() {
       const playerMap = {};
       upsertedPlayers.forEach(p => { playerMap[p.name] = p.id; });
 
-      // ── 3. Insert round record ─────────────────────────────────────────────
+      // ── 3. Save sub assignments for this week ──────────────────────────────
+      for (const [playerName, teamId] of Object.entries(subAssignments)) {
+        if (!teamId || !playerMap[playerName]) continue;
+        // Insert a temporary team_player record flagged as a sub
+        // We use upsert in case they've been added before
+        await supabase.from('team_players').upsert({
+          team_id: teamId,
+          player_id: playerMap[playerName],
+          is_sub: true,
+        }, { onConflict: 'team_id,player_id' });
+      }
+
+      // ── 4. Insert round record ─────────────────────────────────────────────
       const { data: round, error: roundError } = await supabase
         .from('rounds')
         .insert({
@@ -106,7 +149,7 @@ export default function UploadRound() {
         .single();
       if (roundError) throw new Error('Round insert failed: ' + roundError.message);
 
-      // ── 4. Insert hole-by-hole scores ──────────────────────────────────────
+      // ── 5. Insert hole-by-hole scores ──────────────────────────────────────
       const scoreRows = [];
       players.forEach(player => {
         player.scores.forEach((gross, i) => {
@@ -123,7 +166,7 @@ export default function UploadRound() {
       const { error: scoresError } = await supabase.from('player_scores').insert(scoreRows);
       if (scoresError) throw new Error('Scores insert failed: ' + scoresError.message);
 
-      // ── 5. Calculate and save skins ────────────────────────────────────────
+      // ── 6. Calculate and save skins ────────────────────────────────────────
       const skins = calculateSkins(players, section);
       const skinsRows = Object.entries(skins).map(([hole, result]) => ({
         round_id: round.id,
@@ -134,26 +177,38 @@ export default function UploadRound() {
       const { error: skinsError } = await supabase.from('skins_results').insert(skinsRows);
       if (skinsError) throw new Error('Skins insert failed: ' + skinsError.message);
 
-      // ── 6. Calculate and save weekly low net (Degens) ─────────────────────
+      // ── 7. Calculate and save weekly low net ──────────────────────────────
       const degenRows = players.map(p => {
         const grossTotal = p.scores.reduce((a, b) => a + b, 0);
         return {
           round_id: round.id,
           player_id: playerMap[p.name],
           gross_total: grossTotal,
-          net_total: grossTotal - p.fullHandicap, // simple subtraction: handicaps are already 9-hole
+          net_total: grossTotal - p.fullHandicap,
         };
       });
       const { error: netError } = await supabase.from('round_net_totals').insert(degenRows);
       if (netError) throw new Error('Net totals insert failed: ' + netError.message);
 
-      // ── 7. Calculate match play if week is known ───────────────────────────
+      // ── 8. Calculate match play if week is known ───────────────────────────
       if (weekOverride) {
         await calculateAndSaveMatchPlay(round.id, parseInt(weekOverride), players, section, playerMap);
       }
 
+      // ── 9. Remove sub assignments after saving (keep roster clean) ─────────
+      for (const [playerName, teamId] of Object.entries(subAssignments)) {
+        if (!teamId || !playerMap[playerName]) continue;
+        await supabase.from('team_players')
+          .delete()
+          .eq('team_id', teamId)
+          .eq('player_id', playerMap[playerName])
+          .eq('is_sub', true);
+      }
+
       setStatus({ type: 'success', message: `✅ Round saved! ${players.length} players, ${section} 9.` });
       setParsed(null);
+      setUnassignedPlayers([]);
+      setSubAssignments({});
       setWeekOverride('');
       setRoundDate('');
     } catch (err) {
@@ -164,7 +219,6 @@ export default function UploadRound() {
   }
 
   async function calculateAndSaveMatchPlay(roundId, weekNumber, players, section, playerMap) {
-    // Get ALL matchups for this week (4 per week)
     const { data: matchups } = await supabase
       .from('schedule')
       .select('*, team_a:teams!team_a_id(*), team_b:teams!team_b_id(*)')
@@ -172,10 +226,8 @@ export default function UploadRound() {
 
     if (!matchups || matchups.length === 0) return;
 
-    // Get all team IDs involved this week
     const teamIds = matchups.flatMap(m => [m.team_a_id, m.team_b_id]);
 
-    // Look up all rosters for those teams
     const { data: teamRosters } = await supabase
       .from('team_players')
       .select('team_id, player_id, players(name)')
@@ -224,32 +276,18 @@ export default function UploadRound() {
       <div className="row g-3 mb-4">
         <div className="col-12 col-md-4">
           <label className="form-label fw-semibold">Round Date</label>
-          <input
-            type="date"
-            className="form-control"
-            value={roundDate}
-            onChange={e => setRoundDate(e.target.value)}
-          />
+          <input type="date" className="form-control" value={roundDate} onChange={e => setRoundDate(e.target.value)} />
         </div>
         <div className="col-12 col-md-4">
-          <label className="form-label fw-semibold">Week # <span className="text-muted fw-normal">(optional — needed for match play)</span></label>
-          <input
-            type="number"
-            className="form-control"
-            placeholder="e.g. 5"
-            value={weekOverride}
-            onChange={e => setWeekOverride(e.target.value)}
-            min="1"
-          />
+          <label className="form-label fw-semibold">Week # <span className="text-muted fw-normal">(needed for match play)</span></label>
+          <input type="number" className="form-control" placeholder="e.g. 5" value={weekOverride}
+            onChange={e => setWeekOverride(e.target.value)} min="1" />
         </div>
       </div>
 
       <div
         className={`upload-zone p-5 text-center mb-4 ${dragActive ? 'drag-active' : ''}`}
-        onDragEnter={handleDrag}
-        onDragLeave={handleDrag}
-        onDragOver={handleDrag}
-        onDrop={handleDrop}
+        onDragEnter={handleDrag} onDragLeave={handleDrag} onDragOver={handleDrag} onDrop={handleDrop}
       >
         <i className="bi bi-cloud-upload fs-1 text-matador-red mb-3 d-block"></i>
         <p className="mb-2 fw-semibold">Drag and drop your CSV file here</p>
@@ -266,6 +304,36 @@ export default function UploadRound() {
         </div>
       )}
 
+      {/* Sub assignment step */}
+      {unassignedPlayers.length > 0 && parsed && (
+        <div className="card border-0 shadow-sm mb-4">
+          <div className="card-header bg-warning text-dark">
+            <strong><i className="bi bi-person-fill-exclamation me-2"></i>Sub Players — Assign to Teams</strong>
+          </div>
+          <div className="card-body">
+            <p className="text-muted small mb-3">These players aren't on any permanent team roster. Assign each one to the team they're subbing for this week.</p>
+            {unassignedPlayers.map(p => (
+              <div key={p.name} className="row g-2 align-items-center mb-2">
+                <div className="col-12 col-md-4">
+                  <span className="fw-semibold">{p.name}</span>
+                  <span className="text-muted ms-2 small">HC: {p.fullHandicap}</span>
+                </div>
+                <div className="col-12 col-md-5">
+                  <select
+                    className="form-select form-select-sm"
+                    value={subAssignments[p.name] || ''}
+                    onChange={e => setSubAssignments(prev => ({ ...prev, [p.name]: e.target.value }))}
+                  >
+                    <option value="">Not subbing (skip from match play)</option>
+                    {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {parsed && (
         <div className="card border-0 shadow-sm mb-4">
           <div className="card-header bg-matador-black text-white">
@@ -275,12 +343,7 @@ export default function UploadRound() {
             <div className="table-responsive">
               <table className="table table-sm mb-0">
                 <thead className="table-light">
-                  <tr>
-                    <th>Player</th>
-                    <th>Team #</th>
-                    <th>Handicap</th>
-                    <th>Total Gross</th>
-                  </tr>
+                  <tr><th>Player</th><th>Team #</th><th>Handicap</th><th>Total Gross</th></tr>
                 </thead>
                 <tbody>
                   {parsed.players.map(p => (
@@ -299,7 +362,7 @@ export default function UploadRound() {
             <button className="btn btn-matador" onClick={saveRound} disabled={uploading}>
               {uploading ? <><span className="spinner-border spinner-border-sm me-2"></span>Saving...</> : <><i className="bi bi-check-circle me-1"></i>Save Round</>}
             </button>
-            <button className="btn btn-outline-secondary" onClick={() => { setParsed(null); setStatus(null); }}>
+            <button className="btn btn-outline-secondary" onClick={() => { setParsed(null); setStatus(null); setUnassignedPlayers([]); setSubAssignments({}); }}>
               Cancel
             </button>
           </div>
