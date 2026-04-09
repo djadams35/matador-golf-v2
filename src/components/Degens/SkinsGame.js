@@ -13,6 +13,7 @@ export default function SkinsGame() {
   const [seasonSkins, setSeasonSkins] = useState([]);
 
   const [handicapType, setHandicapType] = useState('full'); // 'full' or 'half'
+  const [showAllSkins, setShowAllSkins] = useState(false);
 
   useEffect(() => { fetchRounds(); }, []); // eslint-disable-line
 
@@ -149,7 +150,7 @@ export default function SkinsGame() {
                 <tr><th>Rank</th><th>Player</th><th className="text-center">Total Skins</th></tr>
               </thead>
               <tbody>
-                {seasonSkins.map((row, i) => (
+                {(showAllSkins ? seasonSkins : seasonSkins.slice(0, 3)).map((row, i) => (
                   <tr key={row.name} className={i === 0 ? 'table-matador-success' : ''}>
                     <td className="fw-bold">{i + 1}</td>
                     <td>{row.name}</td>
@@ -158,6 +159,14 @@ export default function SkinsGame() {
                 ))}
               </tbody>
             </table>
+            {seasonSkins.length > 3 && (
+              <div className="text-center py-2 border-top">
+                <button className="btn btn-sm btn-link text-muted" onClick={() => setShowAllSkins(s => !s)}>
+                  <i className={`bi bi-chevron-${showAllSkins ? 'up' : 'down'} me-1`}></i>
+                  {showAllSkins ? 'Show less' : `Show all ${seasonSkins.length} players`}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
