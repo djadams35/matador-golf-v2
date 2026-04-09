@@ -37,7 +37,7 @@ export function parseRoundCSV(file) {
         // Second pass: raw row access (no header mode) for reliable column indexing
         Papa.parse(file, {
           header: false,
-          dynamicTyping: true,
+          dynamicTyping: false,  // keep as strings so "+1" handicaps aren't mangled
           skipEmptyLines: true,
           complete: (rawResult) => {
             try {
@@ -56,13 +56,17 @@ export function parseRoundCSV(file) {
               );
 
               const players = playerRows.map((row, index) => {
-                const fullHandicap = parseFloat(row[13]) || 0;
+                // Handle plus handicaps like "+1" — must read as string before parsing
+                const hdcpRaw = String(row[13] ?? '').trim();
+                const fullHandicap = hdcpRaw.startsWith('+')
+                  ? -parseFloat(hdcpRaw.slice(1))   // +1 → -1 (gives strokes, not receives)
+                  : parseFloat(hdcpRaw) || 0;
                 return {
                   name: String(row[0]).trim(),
                   teamNumber: row[1] ? parseInt(row[1]) : null,
                   fullHandicap,
                   halfHandicap: fullHandicap / 2,
-                  scores: row.slice(3, 12).map(s => parseInt(s) || 0),
+                  scores: row.slice(3, 12).map(s => parseInt(String(s)) || 0),
                   originalIndex: index,
                 };
               });
