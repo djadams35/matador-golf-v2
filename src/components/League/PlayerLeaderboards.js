@@ -10,6 +10,16 @@ export default function PlayerLeaderboards() {
   async function fetchData() {
     setLoading(true);
 
+    // Only include permanent roster players (not subs)
+    const { data: rosterRows } = await supabase
+      .from('team_players')
+      .select('players(name)')
+      .eq('is_sub', false);
+
+    const rosterNames = new Set(
+      (rosterRows || []).map(r => r.players?.name).filter(Boolean)
+    );
+
     const { data: scores } = await supabase
       .from('player_scores')
       .select('player_id, hole_number, gross_score, full_handicap, players(name), rounds(holes_played, played_date, par_scores)')
@@ -22,6 +32,7 @@ export default function PlayerLeaderboards() {
     scores.forEach(row => {
       if (!row.players || !row.rounds) return;
       const name = row.players.name;
+      if (!rosterNames.has(name)) return;
       const section = row.rounds.holes_played;
       const holeIndex = section === 'front' ? row.hole_number - 1 : row.hole_number - 10;
       const parScores = row.rounds.par_scores;
@@ -57,7 +68,7 @@ export default function PlayerLeaderboards() {
       netTotals.forEach(row => {
         if (!row.players) return;
         const name = row.players.name;
-        if (playerStats[name]) {
+        if (playerStats[name] && rosterNames.has(name)) {
           playerStats[name].grossScores.push(row.gross_total);
           playerStats[name].netScores.push(row.net_total);
           playerStats[name].rounds++;
