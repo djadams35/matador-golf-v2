@@ -14,7 +14,7 @@ export default function SkinsGame() {
 
   const [handicapType, setHandicapType] = useState('full'); // 'full' or 'half'
 
-  useEffect(() => { fetchRounds(); fetchSeasonSkins(); }, []);
+  useEffect(() => { fetchRounds(); fetchSeasonSkins(); }, []); // eslint-disable-line
 
   async function fetchRounds() {
     setLoading(true);

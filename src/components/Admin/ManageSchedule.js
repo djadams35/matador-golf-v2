@@ -50,7 +50,7 @@ export default function ManageSchedule() {
       complete: async (result) => {
         const rows = result.data;
         let currentRound = null;
-        let imported = 0, skipped = 0, errors = [];
+        let imported = 0, errors = [];
 
         for (const row of rows) {
           // Skip header row
