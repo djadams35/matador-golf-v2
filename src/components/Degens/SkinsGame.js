@@ -12,9 +12,6 @@ export default function SkinsGame() {
   const [loading, setLoading] = useState(true);
   const [seasonSkins, setSeasonSkins] = useState([]);
 
-  // Also supports ad-hoc CSV upload (for quick use outside of saved rounds)
-  const [csvMode, setCsvMode] = useState(false);
-  const [dragActive, setDragActive] = useState(false);
   const [handicapType, setHandicapType] = useState('full'); // 'full' or 'half'
 
   useEffect(() => { fetchRounds(); fetchSeasonSkins(); }, []);
@@ -97,25 +94,6 @@ export default function SkinsGame() {
 
   const holeHandicaps = getHoleHandicaps(section);
 
-  // ── Ad-hoc CSV upload (same logic as original app) ────────────────────────
-  const { parseRoundCSV } = require('../../utils/csvParser');
-
-  function handleDrag(e) { e.preventDefault(); e.stopPropagation(); setDragActive(e.type === 'dragenter' || e.type === 'dragover'); }
-  function handleDrop(e) { e.preventDefault(); e.stopPropagation(); setDragActive(false); if (e.dataTransfer.files?.[0]) handleCSV(e.dataTransfer.files[0]); }
-  function handleChange(e) { e.preventDefault(); if (e.target.files?.[0]) handleCSV(e.target.files[0]); }
-
-  async function handleCSV(file) {
-    try {
-      const result = await parseRoundCSV(file);
-      setSection(result.section);
-      setPlayers(result.players);
-      setSkinsResults(calculateSkins(result.players, result.section, handicapType));
-      setSelectedRound(null);
-    } catch (err) {
-      console.error(err);
-    }
-  }
-
   // Recalculate when handicap type toggle changes
   React.useEffect(() => {
     if (players.length > 0) {
@@ -150,15 +128,7 @@ export default function SkinsGame() {
         </div>
       )}
 
-      <div className="d-flex align-items-center justify-content-between gap-3 mb-4 flex-wrap">
-        <div className="d-flex gap-2">
-          <button className={`btn btn-sm ${!csvMode ? 'btn-matador' : 'btn-outline-secondary'}`} onClick={() => setCsvMode(false)}>
-            Load from History
-          </button>
-          <button className={`btn btn-sm ${csvMode ? 'btn-matador' : 'btn-outline-secondary'}`} onClick={() => setCsvMode(true)}>
-            Upload CSV
-          </button>
-        </div>
+      <div className="d-flex align-items-center justify-content-end gap-3 mb-4 flex-wrap">
         <div className="d-flex align-items-center gap-2">
           <span className="text-muted small fw-semibold">Handicap:</span>
           <div className="btn-group btn-group-sm">
@@ -178,33 +148,19 @@ export default function SkinsGame() {
         </div>
       </div>
 
-      {!csvMode ? (
-        <div className="mb-4">
-          <label className="form-label fw-semibold">Select a round:</label>
-          {loading ? <div className="spinner-border spinner-border-sm text-matador-red ms-2"></div> : (
-            <select className="form-select" onChange={e => loadRound(e.target.value)} defaultValue="">
-              <option value="">-- Choose a round --</option>
-              {rounds.map(r => (
-                <option key={r.id} value={r.id}>
-                  {r.played_date || 'Unknown date'} — {r.holes_played === 'front' ? 'Front 9' : 'Back 9'}{r.week_number ? ` (Week ${r.week_number})` : ''}
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
-      ) : (
-        <div
-          className={`upload-zone p-4 text-center mb-4 ${dragActive ? 'drag-active' : ''}`}
-          onDragEnter={handleDrag} onDragLeave={handleDrag} onDragOver={handleDrag} onDrop={handleDrop}
-        >
-          <i className="bi bi-cloud-upload fs-2 text-matador-red mb-2 d-block"></i>
-          <p className="mb-2 fw-semibold">Drag & drop CSV or</p>
-          <label className="btn btn-matador btn-sm">
-            Choose File
-            <input type="file" accept=".csv" onChange={handleChange} className="d-none" />
-          </label>
-        </div>
-      )}
+      <div className="mb-4">
+        <label className="form-label fw-semibold">Select a round:</label>
+        {loading ? <div className="spinner-border spinner-border-sm text-matador-red ms-2"></div> : (
+          <select className="form-select" onChange={e => loadRound(e.target.value)} defaultValue="">
+            <option value="">-- Choose a round --</option>
+            {rounds.map(r => (
+              <option key={r.id} value={r.id}>
+                {r.played_date || 'Unknown date'} — {r.holes_played === 'front' ? 'Front 9' : 'Back 9'}{r.week_number ? ` (Week ${r.week_number})` : ''}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
 
       {/* ── Skins Results Table (same as original app) ── */}
       {Object.keys(skinsResults).length > 0 && players.length > 0 && (
