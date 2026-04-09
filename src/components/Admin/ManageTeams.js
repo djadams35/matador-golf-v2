@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Papa from 'papaparse';
 import { supabase } from '../../supabaseClient';
 
 export default function ManageTeams() {
@@ -8,6 +9,7 @@ export default function ManageTeams() {
   const [message, setMessage] = useState(null);
   const [newTeam, setNewTeam] = useState({ name: '', player1: '', player2: '' });
   const [saving, setSaving] = useState(false);
+  const [importing, setImporting] = useState(false);
 
   useEffect(() => { fetchData(); }, []);
 
@@ -24,6 +26,91 @@ export default function ManageTeams() {
     else setTeams(teamsRes.data || []);
     if (playersRes.data) setPlayers(playersRes.data);
     setLoading(false);
+  }
+
+  async function importCSV(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true);
+    setMessage(null);
+
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: async (result) => {
+        // Expected columns: #, Team, Points, [player1 name], [player2 name]
+        // The CSV has: #, Team, Points, Player1Name, Player2Name
+        const rows = result.data;
+        let created = 0, skipped = 0, errors = [];
+
+        for (const row of rows) {
+          // Column names from the CSV: "#", "Team", "Points", and two unnamed player columns
+          // PapaParse will use the header row values as keys
+          const fields = result.meta.fields;
+          // Player names are in columns index 3 and 4 (after #, Team, Points)
+          const teamName = row['Team']?.trim();
+          const player1Name = row[fields[3]]?.trim();
+          const player2Name = row[fields[4]]?.trim();
+
+          if (!teamName || !player1Name || !player2Name) {
+            skipped++;
+            continue;
+          }
+
+          // Upsert both players
+          const { data: upserted, error: pErr } = await supabase
+            .from('players')
+            .upsert([{ name: player1Name }, { name: player2Name }], { onConflict: 'name' })
+            .select();
+          if (pErr) { errors.push(`${teamName}: ${pErr.message}`); continue; }
+
+          const p1 = upserted.find(p => p.name === player1Name);
+          const p2 = upserted.find(p => p.name === player2Name);
+          if (!p1 || !p2) { errors.push(`${teamName}: could not find players after upsert`); continue; }
+
+          // Check if team already exists
+          const { data: existing } = await supabase
+            .from('teams')
+            .select('id')
+            .eq('name', teamName)
+            .single();
+
+          if (existing) { skipped++; continue; }
+
+          // Create team
+          const { data: team, error: tErr } = await supabase
+            .from('teams')
+            .insert({ name: teamName })
+            .select()
+            .single();
+          if (tErr) { errors.push(`${teamName}: ${tErr.message}`); continue; }
+
+          // Assign players
+          const { error: rErr } = await supabase.from('team_players').insert([
+            { team_id: team.id, player_id: p1.id },
+            { team_id: team.id, player_id: p2.id },
+          ]);
+          if (rErr) { errors.push(`${teamName}: ${rErr.message}`); continue; }
+
+          created++;
+        }
+
+        if (errors.length > 0) {
+          setMessage({ type: 'error', text: `${created} teams imported. Errors: ${errors.join('; ')}` });
+        } else {
+          setMessage({ type: 'success', text: `✅ ${created} teams imported${skipped > 0 ? `, ${skipped} skipped (already exist)` : ''}.` });
+        }
+
+        fetchData();
+        setImporting(false);
+        // Reset file input
+        e.target.value = '';
+      },
+      error: (err) => {
+        setMessage({ type: 'error', text: 'Could not read CSV: ' + err.message });
+        setImporting(false);
+      }
+    });
   }
 
   async function createTeam(e) {
@@ -68,16 +155,33 @@ export default function ManageTeams() {
   return (
     <div>
       <h5 className="fw-bold mb-3"><i className="bi bi-people me-2 text-matador-red"></i>Manage Teams</h5>
-      <p className="text-muted mb-4">There are 16 two-man teams. Create each team and assign its two players.</p>
 
+      {/* CSV Import */}
       <div className="card border-0 shadow-sm mb-4">
-        <div className="card-header bg-matador-black text-white">Add New Team</div>
+        <div className="card-header bg-matador-black text-white d-flex justify-content-between align-items-center">
+          <span>Import Teams from CSV</span>
+          <span className="text-white-50 small">Expected columns: #, Team, Points, Player1, Player2</span>
+        </div>
+        <div className="card-body">
+          <label className={`btn btn-matador ${importing ? 'disabled' : ''}`}>
+            {importing
+              ? <><span className="spinner-border spinner-border-sm me-2"></span>Importing...</>
+              : <><i className="bi bi-upload me-2"></i>Choose teams.csv</>}
+            <input type="file" accept=".csv" className="d-none" onChange={importCSV} disabled={importing} />
+          </label>
+          <span className="text-muted ms-3 small">Skips teams that already exist. Also adds players automatically.</span>
+        </div>
+      </div>
+
+      {/* Manual add */}
+      <div className="card border-0 shadow-sm mb-4">
+        <div className="card-header bg-matador-black text-white">Add Single Team Manually</div>
         <div className="card-body">
           <form onSubmit={createTeam}>
             <div className="row g-3">
               <div className="col-12 col-md-4">
                 <label className="form-label fw-semibold">Team Name</label>
-                <input type="text" className="form-control" placeholder="e.g. Team Alpha"
+                <input type="text" className="form-control" placeholder="e.g. Beyer/Adams"
                   value={newTeam.name} onChange={e => setNewTeam(t => ({ ...t, name: e.target.value }))} />
               </div>
               <div className="col-12 col-md-3">
