@@ -69,13 +69,12 @@ export default function ManageTeams() {
           if (!p1 || !p2) { errors.push(`${teamName}: could not find players after upsert`); continue; }
 
           // Check if team already exists
-          const { data: existing } = await supabase
+          const { data: existingList } = await supabase
             .from('teams')
             .select('id')
-            .eq('name', teamName)
-            .single();
+            .eq('name', teamName);
 
-          if (existing) { skipped++; continue; }
+          if (existingList && existingList.length > 0) { skipped++; continue; }
 
           // Create team
           const { data: team, error: tErr } = await supabase
