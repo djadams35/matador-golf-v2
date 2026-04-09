@@ -117,16 +117,16 @@ export default function SkinsGame() {
           <span className="text-muted small fw-semibold">Handicap:</span>
           <div className="btn-group btn-group-sm">
             <button
-              className={`btn ${handicapType === 'half' ? 'btn-matador' : 'btn-outline-secondary'}`}
-              onClick={() => setHandicapType('half')}
-            >
-              Half
-            </button>
-            <button
               className={`btn ${handicapType === 'full' ? 'btn-matador' : 'btn-outline-secondary'}`}
               onClick={() => setHandicapType('full')}
             >
               Full
+            </button>
+            <button
+              className={`btn ${handicapType === 'half' ? 'btn-matador' : 'btn-outline-secondary'}`}
+              onClick={() => setHandicapType('half')}
+            >
+              Half
             </button>
           </div>
         </div>
