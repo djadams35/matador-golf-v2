@@ -64,7 +64,7 @@ function HoleTable({ playerA, playerB, scoreMap, section, aTeamName, bTeamName }
                 </td>
                 <td className="text-center">
                   {winner === 'A' && <span className="badge badge-matador">{playerA}</span>}
-                  {winner === 'B' && <span className="badge bg-secondary">{playerB}</span>}
+                  {winner === 'B' && <span className="badge bg-primary">{playerB}</span>}
                   {winner === 'tie' && <span className="text-muted small">Tied</span>}
                 </td>
                 <td className={`text-center small ${matchClass}`}>{matchLabel}</td>
@@ -79,7 +79,7 @@ function HoleTable({ playerA, playerB, scoreMap, section, aTeamName, bTeamName }
                 ? 'All Square'
                 : runningScore > 0
                   ? <><span className="badge badge-matador me-2">{aTeamName} wins</span>{aFirstName} {runningScore} UP</>
-                  : <><span className="badge bg-secondary me-2">{bTeamName} wins</span>{bFirstName} {Math.abs(runningScore)} UP</>}
+                  : <><span className="badge bg-primary me-2">{bTeamName} wins</span>{bFirstName} {Math.abs(runningScore)} UP</>}
             </td>
             <td className="text-center fw-bold">Final</td>
             <td className={`text-center fw-bold ${runningScore > 0 ? 'text-success' : runningScore < 0 ? 'text-danger' : 'text-muted'}`}>
@@ -186,14 +186,14 @@ export default function MatchResults() {
             <div className="card-body">
               <div className="d-flex justify-content-between align-items-center mb-3">
                 <div className="text-center">
-                  <div className="fw-bold fs-5">{aName}</div>
+                  <div className="fw-bold fs-5 text-matador-red">{aName}</div>
                   <div className="display-6 fw-bold text-matador-red">{r.team_a_points}</div>
                   <div className="text-muted small">points</div>
                 </div>
                 <div className="text-center text-muted">vs</div>
                 <div className="text-center">
-                  <div className="fw-bold fs-5">{bName}</div>
-                  <div className="display-6 fw-bold text-matador-red">{r.team_b_points}</div>
+                  <div className="fw-bold fs-5 text-primary">{bName}</div>
+                  <div className="display-6 fw-bold text-primary">{r.team_b_points}</div>
                   <div className="text-muted small">points</div>
                 </div>
               </div>
@@ -207,7 +207,7 @@ export default function MatchResults() {
                     <td className="fw-semibold text-nowrap">Low HC Match</td>
                     <td className="small">{low.playerA} vs {low.playerB}</td>
                     <td className="text-center">
-                      <span className={`badge ${low.winner === 'A' ? 'badge-matador' : low.winner === 'B' ? 'bg-secondary' : 'bg-warning text-dark'}`}>
+                      <span className={`badge ${low.winner === 'A' ? 'badge-matador' : low.winner === 'B' ? 'bg-primary' : 'bg-warning text-dark'}`}>
                         {low.winner === 'A' ? low.playerA : low.winner === 'B' ? low.playerB : 'Tie'}
                       </span>
                       <span className="text-muted small ms-1">{low.winner === 'tie' ? '+0.5 each' : '+1'}</span>
@@ -218,7 +218,7 @@ export default function MatchResults() {
                     <td className="fw-semibold text-nowrap">High HC Match</td>
                     <td className="small">{high.playerA} vs {high.playerB}</td>
                     <td className="text-center">
-                      <span className={`badge ${high.winner === 'A' ? 'badge-matador' : high.winner === 'B' ? 'bg-secondary' : 'bg-warning text-dark'}`}>
+                      <span className={`badge ${high.winner === 'A' ? 'badge-matador' : high.winner === 'B' ? 'bg-primary' : 'bg-warning text-dark'}`}>
                         {high.winner === 'A' ? high.playerA : high.winner === 'B' ? high.playerB : 'Tie'}
                       </span>
                       <span className="text-muted small ms-1">{high.winner === 'tie' ? '+0.5 each' : '+1'}</span>
@@ -229,7 +229,7 @@ export default function MatchResults() {
                     <td className="fw-semibold text-nowrap">Team Net</td>
                     <td className="small text-muted">{team.teamANet} vs {team.teamBNet}</td>
                     <td className="text-center">
-                      <span className={`badge ${team.winner === 'A' ? 'badge-matador' : team.winner === 'B' ? 'bg-secondary' : 'bg-warning text-dark'}`}>
+                      <span className={`badge ${team.winner === 'A' ? 'badge-matador' : team.winner === 'B' ? 'bg-primary' : 'bg-warning text-dark'}`}>
                         {team.winner === 'A' ? aName : team.winner === 'B' ? bName : 'Tie'}
                       </span>
                       <span className="text-muted small ms-1">{team.winner === 'tie' ? '+0.5 each' : '+1'}</span>
