@@ -208,7 +208,7 @@ export default function MatchResults() {
                     <td className="small">{low.playerA} vs {low.playerB}</td>
                     <td className="text-center">
                       <span className={`badge ${low.winner === 'A' ? 'badge-matador' : low.winner === 'B' ? 'bg-secondary' : 'bg-warning text-dark'}`}>
-                        {low.winner === 'A' ? aName : low.winner === 'B' ? bName : 'Tie'}
+                        {low.winner === 'A' ? low.playerA : low.winner === 'B' ? low.playerB : 'Tie'}
                       </span>
                       <div className="text-muted small">{low.aHolesWon}–{low.bHolesWon} ({low.halved} tied)</div>
                     </td>
@@ -218,7 +218,7 @@ export default function MatchResults() {
                     <td className="small">{high.playerA} vs {high.playerB}</td>
                     <td className="text-center">
                       <span className={`badge ${high.winner === 'A' ? 'badge-matador' : high.winner === 'B' ? 'bg-secondary' : 'bg-warning text-dark'}`}>
-                        {high.winner === 'A' ? aName : high.winner === 'B' ? bName : 'Tie'}
+                        {high.winner === 'A' ? high.playerA : high.winner === 'B' ? high.playerB : 'Tie'}
                       </span>
                       <div className="text-muted small">{high.aHolesWon}–{high.bHolesWon} ({high.halved} tied)</div>
                     </td>
