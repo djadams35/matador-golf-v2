@@ -54,18 +54,18 @@ function HoleTable({ playerA, playerB, scoreMap, section, aTeamName, bTeamName }
           {holes.map(({ holeNumber, si, aScore, bScore, aNet, bNet, aStrokes, bStrokes, winner, runningScore: rs }) => {
             const leadName = rs > 0 ? aFirstName : rs < 0 ? bFirstName : null;
             const matchLabel = rs === 0 ? 'AS' : `${leadName} ${Math.abs(rs)} UP`;
-            const matchClass = rs > 0 ? 'text-success fw-bold' : rs < 0 ? 'text-danger fw-bold' : 'text-muted';
+            const matchClass = rs > 0 ? 'text-danger fw-bold' : rs < 0 ? 'text-primary fw-bold' : 'text-muted';
 
             return (
               <tr key={holeNumber}>
                 <td className="fw-semibold">{holeNumber}</td>
                 <td className="text-center text-muted small">{si}</td>
-                <td className={`text-center ${winner === 'A' ? 'fw-bold table-success' : ''}`}>
+                <td className={`text-center ${winner === 'A' ? 'fw-bold table-danger' : ''}`}>
                   {aScore != null ? (
                     <>{aStrokes > 0 && <span className="text-danger me-1" title="Receives stroke">●</span>}{aScore.gross} ({aNet})</>
                   ) : '—'}
                 </td>
-                <td className={`text-center ${winner === 'B' ? 'fw-bold table-success' : ''}`}>
+                <td className={`text-center ${winner === 'B' ? 'fw-bold table-primary' : ''}`}>
                   {bScore != null ? (
                     <>{bStrokes > 0 && <span className="text-danger me-1" title="Receives stroke">●</span>}{bScore.gross} ({bNet})</>
                   ) : '—'}
@@ -90,7 +90,7 @@ function HoleTable({ playerA, playerB, scoreMap, section, aTeamName, bTeamName }
                   : <><span className="badge bg-primary me-2">{bTeamName} wins</span>{bFirstName} {Math.abs(runningScore)} UP</>}
             </td>
             <td className="text-center fw-bold">Final</td>
-            <td className={`text-center fw-bold ${runningScore > 0 ? 'text-success' : runningScore < 0 ? 'text-danger' : 'text-muted'}`}>
+            <td className={`text-center fw-bold ${runningScore > 0 ? 'text-danger' : runningScore < 0 ? 'text-primary' : 'text-muted'}`}>
               {runningScore === 0 ? 'AS' : runningScore > 0 ? `${runningScore} UP` : `${Math.abs(runningScore)} DN`}
             </td>
           </tr>
