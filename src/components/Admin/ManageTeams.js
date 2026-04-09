@@ -53,6 +53,7 @@ export default function ManageTeams() {
           const player2Name = row[fields[4]]?.trim();
 
           if (!teamName || !player1Name || !player2Name) {
+            errors.push(`Skipped row — teamName: "${teamName}", p1: "${player1Name}", p2: "${player2Name}", fields: ${JSON.stringify(fields)}`);
             skipped++;
             continue;
           }
@@ -74,7 +75,8 @@ export default function ManageTeams() {
             .upsert({ name: teamName }, { onConflict: 'name' })
             .select()
             .single();
-          if (tErr) { errors.push(`${teamName}: ${tErr.message}`); continue; }
+          if (tErr) { errors.push(`${teamName} upsert error: ${tErr.message} (code: ${tErr.code})`); continue; }
+          if (!team) { errors.push(`${teamName}: upsert returned no data`); continue; }
 
           // Assign players
           const { error: rErr } = await supabase.from('team_players').insert([
