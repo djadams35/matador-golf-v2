@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
+import { formatHandicap } from '../../utils/handicapUtils';
 
 export default function WeeklyLowNet() {
   const [weeklyResults, setWeeklyResults] = useState([]);
@@ -198,7 +199,7 @@ export default function WeeklyLowNet() {
                           {p.name}
                           {isWinner && <span className="badge badge-matador ms-2">{round.winners.length > 1 ? 'Tie' : 'Low Net'}</span>}
                         </td>
-                        <td className="text-center text-muted">{p.gross - p.net}</td>
+                        <td className="text-center text-muted">{formatHandicap(p.gross - p.net)}</td>
                         <td className="text-center text-muted">{p.gross}</td>
                         <td className="text-center fw-bold">{p.net}</td>
                       </tr>
