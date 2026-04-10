@@ -170,14 +170,27 @@ export default function PlayerLeaderboards() {
       )}
 
       {view === 'gross' && (
-        <div className="row g-4">
-          <div className="col-12 col-md-6">
-            <LeaderTable title="Best Single Round — Gross" rows={byBestGross} valueKey="bestGross" label="Score" icon="bi-star-fill" />
+        <>
+          <div className="row g-4 mb-4">
+            <div className="col-12 col-md-6">
+              <LeaderTable title="Best Single Round — Gross" rows={byBestGross} valueKey="bestGross" label="Score" icon="bi-star-fill" />
+            </div>
+            <div className="col-12 col-md-6">
+              <LeaderTable title="Season Avg Gross" rows={byAvgGross} valueKey="avgGross" label="Avg" icon="bi-bar-chart-fill" />
+            </div>
           </div>
-          <div className="col-12 col-md-6">
-            <LeaderTable title="Season Avg Gross" rows={byAvgGross} valueKey="avgGross" label="Avg" icon="bi-bar-chart-fill" />
+          <div className="row g-4">
+            <div className="col-12 col-md-4">
+              <LeaderTable title="Eagles" rows={byEagles} valueKey="eagles" label="Eagles" icon="bi-star-fill" />
+            </div>
+            <div className="col-12 col-md-4">
+              <LeaderTable title="Birdies" rows={byBirdies} valueKey="birdies" label="Birdies" icon="bi-arrow-down-circle-fill" />
+            </div>
+            <div className="col-12 col-md-4">
+              <LeaderTable title="Pars" rows={byPars} valueKey="pars" label="Pars" icon="bi-check-circle-fill" />
+            </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );
