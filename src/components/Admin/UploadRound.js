@@ -11,14 +11,25 @@ export default function UploadRound() {
   const [parsed, setParsed] = useState(null);
   const [weekOverride, setWeekOverride] = useState('');
   const [roundDate, setRoundDate] = useState('');
-  const [teams, setTeams] = useState([]);
-  const [subAssignments, setSubAssignments] = useState({}); // playerName -> teamId
+  const [permanentRoster, setPermanentRoster] = useState([]); // { id, name, teamId }
+  const [subAssignments, setSubAssignments] = useState({}); // playerName -> originalPlayerId
   const [unassignedPlayers, setUnassignedPlayers] = useState([]);
 
   useEffect(() => {
-    supabase.from('teams').select('id, name').order('name').then(({ data }) => {
-      if (data) setTeams(data);
-    });
+    supabase
+      .from('team_players')
+      .select('player_id, team_id, players(name)')
+      .eq('is_sub', false)
+      .then(({ data }) => {
+        if (data) {
+          setPermanentRoster(
+            data
+              .filter(r => r.players?.name)
+              .map(r => ({ id: r.player_id, name: r.players.name, teamId: r.team_id }))
+              .sort((a, b) => a.name.localeCompare(b.name))
+          );
+        }
+      });
   }, []);
 
   const handleFile = useCallback(async (file) => {
@@ -50,10 +61,11 @@ export default function UploadRound() {
     try {
       const result = await parseRoundCSV(file);
 
-      // Find which players aren't on any team roster
+      // Find which players aren't on any permanent team roster
       const { data: allRosters } = await supabase
         .from('team_players')
-        .select('player_id, players(name)');
+        .select('player_id, players(name)')
+        .eq('is_sub', false);
 
       const assignedNames = new Set(
         (allRosters || []).map(r => r.players?.name).filter(Boolean)
@@ -62,7 +74,6 @@ export default function UploadRound() {
       const unassigned = result.players.filter(p => !assignedNames.has(p.name));
       setUnassignedPlayers(unassigned);
 
-      // Pre-fill sub assignments with empty
       const assignments = {};
       unassigned.forEach(p => { assignments[p.name] = ''; });
       setSubAssignments(assignments);
@@ -123,16 +134,18 @@ export default function UploadRound() {
       const playerMap = {};
       upsertedPlayers.forEach(p => { playerMap[p.name] = p.id; });
 
-      // ── 3. Save sub assignments for this week ──────────────────────────────
-      for (const [playerName, teamId] of Object.entries(subAssignments)) {
-        if (!teamId || !playerMap[playerName]) continue;
-        // Insert a temporary team_player record flagged as a sub
-        // We use upsert in case they've been added before
+      // ── 3. Temporarily add subs to their original player's team for match play
+      const tempSubEntries = []; // track for cleanup
+      for (const [playerName, originalPlayerId] of Object.entries(subAssignments)) {
+        if (!originalPlayerId || !playerMap[playerName]) continue;
+        const rosterEntry = permanentRoster.find(r => r.id === originalPlayerId);
+        if (!rosterEntry) continue;
         await supabase.from('team_players').upsert({
-          team_id: teamId,
+          team_id: rosterEntry.teamId,
           player_id: playerMap[playerName],
           is_sub: true,
         }, { onConflict: 'team_id,player_id' });
+        tempSubEntries.push({ teamId: rosterEntry.teamId, playerId: playerMap[playerName] });
       }
 
       // ── 4. Insert round record ─────────────────────────────────────────────
@@ -149,6 +162,21 @@ export default function UploadRound() {
         .select()
         .single();
       if (roundError) throw new Error('Round insert failed: ' + roundError.message);
+
+      // ── 4b. Save sub-to-player mappings ───────────────────────────────────
+      const subRows = [];
+      for (const [playerName, originalPlayerId] of Object.entries(subAssignments)) {
+        if (!originalPlayerId || !playerMap[playerName]) continue;
+        subRows.push({
+          round_id: round.id,
+          sub_player_id: playerMap[playerName],
+          original_player_id: originalPlayerId,
+        });
+      }
+      if (subRows.length > 0) {
+        const { error: subError } = await supabase.from('round_subs').insert(subRows);
+        if (subError) throw new Error('Sub mapping insert failed: ' + subError.message);
+      }
 
       // ── 5. Insert hole-by-hole scores ──────────────────────────────────────
       const scoreRows = [];
@@ -178,7 +206,7 @@ export default function UploadRound() {
       const { error: skinsError } = await supabase.from('skins_results').insert(skinsRows);
       if (skinsError) throw new Error('Skins insert failed: ' + skinsError.message);
 
-      // ── 7. Calculate and save weekly low net ──────────────────────────────
+      // ── 7. Calculate and save net totals ──────────────────────────────────
       const degenRows = players.map(p => {
         const grossTotal = p.scores.reduce((a, b) => a + b, 0);
         return {
@@ -196,13 +224,12 @@ export default function UploadRound() {
         await calculateAndSaveMatchPlay(round.id, parseInt(weekOverride), players, section, playerMap);
       }
 
-      // ── 9. Remove sub assignments after saving (keep roster clean) ─────────
-      for (const [playerName, teamId] of Object.entries(subAssignments)) {
-        if (!teamId || !playerMap[playerName]) continue;
+      // ── 9. Remove temp sub team_player records (keep roster clean) ─────────
+      for (const { teamId, playerId } of tempSubEntries) {
         await supabase.from('team_players')
           .delete()
           .eq('team_id', teamId)
-          .eq('player_id', playerMap[playerName])
+          .eq('player_id', playerId)
           .eq('is_sub', true);
       }
 
@@ -237,11 +264,11 @@ export default function UploadRound() {
     if (!teamRosters) return;
 
     const buildTeam = (teamId) => {
-      const rosterPlayers = (teamRosters || [])
+      const rosterEntries = (teamRosters || [])
         .filter(r => r.team_id === teamId)
         .map(r => players.find(p => p.name === r.players.name))
         .filter(Boolean);
-      return { players: rosterPlayers };
+      return { players: rosterEntries };
     };
 
     for (const matchup of matchups) {
@@ -269,6 +296,9 @@ export default function UploadRound() {
       });
     }
   }
+
+  // Players in the current round who can't be subbed for (they're already playing)
+  const playingNames = new Set((parsed?.players || []).map(p => p.name));
 
   return (
     <div>
@@ -309,10 +339,13 @@ export default function UploadRound() {
       {unassignedPlayers.length > 0 && parsed && (
         <div className="card border-0 shadow-sm mb-4">
           <div className="card-header bg-warning text-dark">
-            <strong><i className="bi bi-person-fill-exclamation me-2"></i>Sub Players — Assign to Teams</strong>
+            <strong><i className="bi bi-person-fill-exclamation me-2"></i>Sub Players — Who are they subbing for?</strong>
           </div>
           <div className="card-body">
-            <p className="text-muted small mb-3">These players aren't on any permanent team roster. Assign each one to the team they're subbing for this week.</p>
+            <p className="text-muted small mb-3">
+              These players aren't on any permanent roster. Select the player they're replacing this week.
+              If they're a degen sub, their score will count in Weekly Low Net in place of the absent player.
+            </p>
             {unassignedPlayers.map(p => (
               <div key={p.name} className="row g-2 align-items-center mb-2">
                 <div className="col-12 col-md-4">
@@ -325,8 +358,10 @@ export default function UploadRound() {
                     value={subAssignments[p.name] || ''}
                     onChange={e => setSubAssignments(prev => ({ ...prev, [p.name]: e.target.value }))}
                   >
-                    <option value="">Not subbing (skip from match play)</option>
-                    {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    <option value="">Not subbing for anyone</option>
+                    {permanentRoster
+                      .filter(r => !playingNames.has(r.name))
+                      .map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                   </select>
                 </div>
               </div>

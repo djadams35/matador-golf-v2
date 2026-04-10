@@ -33,16 +33,41 @@ export default function WeeklyLowNet() {
 
     if (degenIds.length === 0) { setLoading(false); return; }
 
-    // Get net totals for all degen players, joined with round info
+    // Get sub mappings for all rounds
+    const { data: subsData } = await supabase
+      .from('round_subs')
+      .select('round_id, sub_player_id, original_player_id');
+
+    // Build per-round map: roundId -> originalPlayerId -> subPlayerId
+    const subsByRound = {};
+    const subPlayerIds = new Set();
+    (subsData || []).forEach(s => {
+      if (!subsByRound[s.round_id]) subsByRound[s.round_id] = {};
+      subsByRound[s.round_id][s.original_player_id] = s.sub_player_id;
+      subPlayerIds.add(s.sub_player_id);
+    });
+
+    // Fetch sub player names
+    const subNames = {};
+    if (subPlayerIds.size > 0) {
+      const { data: subPlayersData } = await supabase
+        .from('players')
+        .select('id, name')
+        .in('id', [...subPlayerIds]);
+      (subPlayersData || []).forEach(p => { subNames[p.id] = p.name; });
+    }
+
+    // Fetch net totals for degens + any sub players
+    const allIds = [...new Set([...degenIds, ...subPlayerIds])];
     const { data: netData } = await supabase
       .from('round_net_totals')
       .select('player_id, net_total, gross_total, rounds(id, played_date, week_number, holes_played)')
-      .in('player_id', degenIds)
+      .in('player_id', allIds)
       .order('rounds(played_date)', { ascending: false });
 
     if (!netData) { setLoading(false); return; }
 
-    // Group by round
+    // Group by round, substituting subs in place of absent degens
     const roundMap = {};
     netData.forEach(row => {
       if (!row.rounds) return;
@@ -56,9 +81,28 @@ export default function WeeklyLowNet() {
           players: [],
         };
       }
+
+      const roundSubs = subsByRound[roundId] || {};
+      const isDegenId = degenIds.includes(row.player_id);
+
+      // Find if this player is a sub for a degen this round
+      const subbedForId = Object.entries(roundSubs).find(([, subId]) => subId === row.player_id)?.[0];
+      const isSubForDegen = !!subbedForId && degenIds.includes(subbedForId);
+
+      // Skip a degen who was subbed out this round
+      const isSubbedOut = isDegenId && !!roundSubs[row.player_id];
+      if (isSubbedOut) return;
+
+      // Skip anyone who isn't a degen and isn't subbing for a degen
+      if (!isDegenId && !isSubForDegen) return;
+
       roundMap[roundId].players.push({
         playerId: row.player_id,
-        name: degenNames[row.player_id] || 'Unknown',
+        name: isSubForDegen
+          ? `${subNames[row.player_id]} (sub for ${degenNames[subbedForId]})`
+          : degenNames[row.player_id] || 'Unknown',
+        baseName: isSubForDegen ? subNames[row.player_id] : degenNames[row.player_id] || 'Unknown',
+        isSub: isSubForDegen,
         net: row.net_total,
         gross: row.gross_total,
       });
@@ -77,11 +121,11 @@ export default function WeeklyLowNet() {
 
     setWeeklyResults(results);
 
-    // Season summary: count wins per player
+    // Season summary: count wins by baseName so sub labels don't clutter the leaderboard
     const winCounts = {};
     results.forEach(r => {
       if (r.winners.length === 1) {
-        const name = r.winners[0].name;
+        const name = r.winners[0].baseName || r.winners[0].name;
         winCounts[name] = (winCounts[name] || 0) + 1;
       }
     });
@@ -136,7 +180,7 @@ export default function WeeklyLowNet() {
               {' — '}{round.holes === 'front' ? 'Front 9' : 'Back 9'}
             </span>
             <span className="badge bg-light text-dark">
-              {round.winners.length > 1 ? `Tie: ${round.winners.map(w => w.name).join(', ')}` : `Winner: ${round.winner}`}
+              {round.winners.length > 1 ? `Tie: ${round.winners.map(w => w.baseName || w.name).join(', ')}` : `Winner: ${round.winners[0]?.baseName || round.winner}`}
             </span>
           </div>
           <div className="card-body p-0">
@@ -147,16 +191,16 @@ export default function WeeklyLowNet() {
                 </thead>
                 <tbody>
                   {round.sorted.map(p => {
-                    const isWinner = round.winners.some(w => w.name === p.name);
+                    const isWinner = round.winners.some(w => w.playerId === p.playerId && w.name === p.name);
                     return (
-                    <tr key={p.name} className={isWinner ? 'table-matador-success' : ''}>
-                      <td className="fw-semibold">
-                        {p.name}
-                        {isWinner && <span className="badge badge-matador ms-2">{round.winners.length > 1 ? 'Tie' : 'Low Net'}</span>}
-                      </td>
-                      <td className="text-center fw-bold">{p.net}</td>
-                      <td className="text-center text-muted">{p.gross}</td>
-                    </tr>
+                      <tr key={p.name} className={isWinner ? 'table-matador-success' : ''}>
+                        <td className="fw-semibold">
+                          {p.name}
+                          {isWinner && <span className="badge badge-matador ms-2">{round.winners.length > 1 ? 'Tie' : 'Low Net'}</span>}
+                        </td>
+                        <td className="text-center fw-bold">{p.net}</td>
+                        <td className="text-center text-muted">{p.gross}</td>
+                      </tr>
                     );
                   })}
                 </tbody>
