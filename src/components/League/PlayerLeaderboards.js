@@ -4,13 +4,13 @@ import { supabase } from '../../supabaseClient';
 export default function PlayerLeaderboards() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [view, setView] = useState('net');
 
   useEffect(() => { fetchData(); }, []);
 
   async function fetchData() {
     setLoading(true);
 
-    // Only include permanent roster players (not subs)
     const { data: rosterRows } = await supabase
       .from('team_players')
       .select('players(name)')
@@ -40,15 +40,10 @@ export default function PlayerLeaderboards() {
 
       if (!playerStats[name]) {
         playerStats[name] = {
-          name,
-          rounds: 0,
-          grossScores: [],
-          netScores: [],
-          eagles: 0,
-          birdies: 0,
-          pars: 0,
-          bestGross: null,
-          bestNet: null,
+          name, rounds: 0,
+          grossScores: [], netScores: [],
+          eagles: 0, birdies: 0, pars: 0,
+          bestGross: null, bestNet: null,
         };
       }
 
@@ -131,33 +126,59 @@ export default function PlayerLeaderboards() {
 
   return (
     <div>
-      <h6 className="fw-bold mb-3 text-matador-red"><i className="bi bi-flag-fill me-2"></i>Scoring Highlights</h6>
-      <div className="row g-4 mb-4">
-        <div className="col-12 col-md-4">
-          <LeaderTable title="Eagles" rows={byEagles} valueKey="eagles" label="Eagles" icon="bi-star-fill" />
-        </div>
-        <div className="col-12 col-md-4">
-          <LeaderTable title="Birdies" rows={byBirdies} valueKey="birdies" label="Birdies" icon="bi-arrow-down-circle-fill" />
-        </div>
-        <div className="col-12 col-md-4">
-          <LeaderTable title="Pars" rows={byPars} valueKey="pars" label="Pars" icon="bi-check-circle-fill" />
+      {/* Toggle */}
+      <div className="d-flex align-items-center gap-2 mb-4">
+        <span className="text-muted small fw-semibold">View:</span>
+        <div className="btn-group btn-group-sm">
+          <button
+            className={`btn ${view === 'net' ? 'btn-matador' : 'btn-outline-secondary'}`}
+            onClick={() => setView('net')}
+          >
+            Net
+          </button>
+          <button
+            className={`btn ${view === 'gross' ? 'btn-matador' : 'btn-outline-secondary'}`}
+            onClick={() => setView('gross')}
+          >
+            Gross
+          </button>
         </div>
       </div>
 
-      <div className="row g-4">
-        <div className="col-12 col-md-6">
-          <LeaderTable title="Best Single Round — Gross" rows={byBestGross} valueKey="bestGross" label="Score" />
+      {view === 'net' && (
+        <>
+          <div className="row g-4 mb-4">
+            <div className="col-12 col-md-6">
+              <LeaderTable title="Best Single Round — Net" rows={byBestNet} valueKey="bestNet" label="Net Score" icon="bi-star-fill" />
+            </div>
+            <div className="col-12 col-md-6">
+              <LeaderTable title="Season Avg Net" rows={byAvgNet} valueKey="avgNet" label="Avg Net" icon="bi-bar-chart-fill" />
+            </div>
+          </div>
+          <div className="row g-4">
+            <div className="col-12 col-md-4">
+              <LeaderTable title="Eagles" rows={byEagles} valueKey="eagles" label="Eagles" icon="bi-star-fill" />
+            </div>
+            <div className="col-12 col-md-4">
+              <LeaderTable title="Birdies" rows={byBirdies} valueKey="birdies" label="Birdies" icon="bi-arrow-down-circle-fill" />
+            </div>
+            <div className="col-12 col-md-4">
+              <LeaderTable title="Pars" rows={byPars} valueKey="pars" label="Pars" icon="bi-check-circle-fill" />
+            </div>
+          </div>
+        </>
+      )}
+
+      {view === 'gross' && (
+        <div className="row g-4">
+          <div className="col-12 col-md-6">
+            <LeaderTable title="Best Single Round — Gross" rows={byBestGross} valueKey="bestGross" label="Score" icon="bi-star-fill" />
+          </div>
+          <div className="col-12 col-md-6">
+            <LeaderTable title="Season Avg Gross" rows={byAvgGross} valueKey="avgGross" label="Avg" icon="bi-bar-chart-fill" />
+          </div>
         </div>
-        <div className="col-12 col-md-6">
-          <LeaderTable title="Best Single Round — Net (Full HC)" rows={byBestNet} valueKey="bestNet" label="Net Score" />
-        </div>
-        <div className="col-12 col-md-6">
-          <LeaderTable title="Season Avg Gross" rows={byAvgGross} valueKey="avgGross" label="Avg" />
-        </div>
-        <div className="col-12 col-md-6">
-          <LeaderTable title="Season Avg Net (Full HC)" rows={byAvgNet} valueKey="avgNet" label="Avg Net" />
-        </div>
-      </div>
+      )}
     </div>
   );
 }
