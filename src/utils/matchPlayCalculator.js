@@ -23,10 +23,18 @@ export function calculateMatchPlay(teamA, teamB, section) {
   function playMatch(playerA, playerB) {
     let aWins = 0, bWins = 0, halved = 0;
 
+    // Difference method: the higher-HC player receives (diff) strokes on the
+    // diff hardest holes. The lower-HC player receives zero strokes.
+    const diff = playerA.fullHandicap - playerB.fullHandicap;
+    const absDiff = Math.abs(diff) % 1 !== 0 ? Math.ceil(Math.abs(diff)) : Math.abs(diff);
+
     for (let i = 0; i < 9; i++) {
       const si = holeHandicaps[i];
-      const aNet = playerA.scores[i] - strokesReceived(playerA.fullHandicap, si);
-      const bNet = playerB.scores[i] - strokesReceived(playerB.fullHandicap, si);
+      let aNet = playerA.scores[i];
+      let bNet = playerB.scores[i];
+
+      if (diff > 0 && si <= absDiff) aNet -= 1;
+      else if (diff < 0 && si <= absDiff) bNet -= 1;
 
       if (aNet < bNet) aWins++;
       else if (bNet < aNet) bWins++;

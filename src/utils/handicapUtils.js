@@ -21,22 +21,26 @@ export function getHoleHandicaps(section) {
 
 /**
  * How many strokes does a player receive (or give) on a given hole?
+ * Used for SKINS only (not match play — match play uses handicap difference).
  *
- * Positive handicap: receives 1 stroke on holes with SI <= handicap.
- * Negative handicap (plus handicap, stored as e.g. -1 for a +1 player):
- *   gives 1 stroke on holes with SI <= abs(handicap), returned as -1.
- *
- * Used for SKINS (half handicap) and MATCH PLAY / LOW NET (full handicap).
+ * Positive handicap N: receives 1 stroke on the N hardest holes (SI <= N).
+ * Negative handicap (plus handicap, e.g. -1 for a +1 player):
+ *   gives 1 stroke on the easiest holes first (highest SI), returned as -1.
+ *   e.g. +1 gives on SI=9, +2 gives on SI=8 and SI=9, etc.
  *
  * @param {number} handicap        - The player's handicap (negative = plus handicap)
  * @param {number} holeStrokeIndex - The hole's stroke index (1–9)
  * @returns {number} -1, 0, or 1
  */
 export function strokesReceived(handicap, holeStrokeIndex) {
-  const abs = Math.abs(handicap);
-  const threshold = abs % 1 !== 0 ? Math.ceil(abs) : abs;
-  if (holeStrokeIndex > threshold) return 0;
-  return handicap >= 0 ? 1 : -1;
+  if (handicap >= 0) {
+    const threshold = handicap % 1 !== 0 ? Math.ceil(handicap) : handicap;
+    return holeStrokeIndex <= threshold ? 1 : 0;
+  } else {
+    // Plus handicap: gives strokes starting from the easiest hole (highest SI)
+    const n = Math.abs(handicap) % 1 !== 0 ? Math.ceil(Math.abs(handicap)) : Math.abs(handicap);
+    return holeStrokeIndex >= (10 - n) ? -1 : 0;
+  }
 }
 
 /**

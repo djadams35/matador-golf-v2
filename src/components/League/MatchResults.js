@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
-import { strokesReceived, getHoleHandicaps, formatHandicap } from '../../utils/handicapUtils';
+import { getHoleHandicaps, formatHandicap } from '../../utils/handicapUtils';
 
 function HoleTable({ playerA, playerB, scoreMap, section, aTeamName, bTeamName }) {
   const holeHandicaps = getHoleHandicaps(section);
@@ -13,13 +13,18 @@ function HoleTable({ playerA, playerB, scoreMap, section, aTeamName, bTeamName }
   const aHandicap = scoreMap[playerA] ? Object.values(scoreMap[playerA])[0]?.fullHandicap : null;
   const bHandicap = scoreMap[playerB] ? Object.values(scoreMap[playerB])[0]?.fullHandicap : null;
 
+  // Match play uses handicap difference method:
+  // the higher-HC player receives (diff) strokes on the diff hardest holes.
+  const hcDiff = aHandicap !== null && bHandicap !== null ? aHandicap - bHandicap : 0;
+  const absDiff = Math.abs(hcDiff) % 1 !== 0 ? Math.ceil(Math.abs(hcDiff)) : Math.abs(hcDiff);
+
   const holes = [...Array(9)].map((_, i) => {
     const holeNumber = section === 'front' ? i + 1 : i + 10;
     const si = holeHandicaps[i];
     const aScore = scoreMap[playerA]?.[i];
     const bScore = scoreMap[playerB]?.[i];
-    const aStrokes = aScore != null ? strokesReceived(aScore.fullHandicap, si) : 0;
-    const bStrokes = bScore != null ? strokesReceived(bScore.fullHandicap, si) : 0;
+    const aStrokes = hcDiff > 0 && si <= absDiff ? 1 : 0;
+    const bStrokes = hcDiff < 0 && si <= absDiff ? 1 : 0;
     const aNet = aScore != null ? aScore.gross - aStrokes : null;
     const bNet = bScore != null ? bScore.gross - bStrokes : null;
     const winner = aNet !== null && bNet !== null
