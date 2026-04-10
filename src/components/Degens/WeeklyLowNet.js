@@ -187,7 +187,7 @@ export default function WeeklyLowNet() {
             <div className="table-responsive">
               <table className="table table-sm mb-0">
                 <thead className="table-light">
-                  <tr><th>Player</th><th className="text-center">Net Total</th><th className="text-center">Gross Total</th></tr>
+                  <tr><th>Player</th><th className="text-center">HC</th><th className="text-center">Gross</th><th className="text-center">Net</th></tr>
                 </thead>
                 <tbody>
                   {round.sorted.map(p => {
@@ -198,8 +198,9 @@ export default function WeeklyLowNet() {
                           {p.name}
                           {isWinner && <span className="badge badge-matador ms-2">{round.winners.length > 1 ? 'Tie' : 'Low Net'}</span>}
                         </td>
-                        <td className="text-center fw-bold">{p.net}</td>
+                        <td className="text-center text-muted">{p.gross - p.net}</td>
                         <td className="text-center text-muted">{p.gross}</td>
+                        <td className="text-center fw-bold">{p.net}</td>
                       </tr>
                     );
                   })}
