@@ -3,6 +3,13 @@ import { supabase } from '../../supabaseClient';
 import { calculateSkins } from '../../utils/skinsCalculator';
 import { getHoleHandicaps, formatHandicap } from '../../utils/handicapUtils';
 
+const HDCP_OPTIONS = [
+  { label: 'Full', value: 1 },
+  { label: '75%',  value: 0.75 },
+  { label: '50%',  value: 0.5 },
+  { label: '25%',  value: 0.25 },
+];
+
 export default function SkinsGame() {
   const [rounds, setRounds] = useState([]);
   const [selectedRound, setSelectedRound] = useState(null);
@@ -10,10 +17,8 @@ export default function SkinsGame() {
   const [skinsResults, setSkinsResults] = useState({});
   const [section, setSection] = useState('front');
   const [loading, setLoading] = useState(true);
-  const [seasonSkinsFull, setSeasonSkinsFull] = useState([]);
-  const [seasonSkinsHalf, setSeasonSkinsHalf] = useState([]);
-
-  const [handicapType, setHandicapType] = useState('full'); // 'full' or 'half'
+  const [seasonSkins, setSeasonSkins] = useState({}); // keyed by multiplier string
+  const [multiplier, setMultiplier] = useState(1);
   const [showAllSkins, setShowAllSkins] = useState(false);
 
   useEffect(() => { fetchRounds(); calculateSeasonSkins(); }, []); // eslint-disable-line
@@ -27,9 +32,7 @@ export default function SkinsGame() {
     const roundList = data || [];
     setRounds(roundList);
     setLoading(false);
-    if (roundList.length > 0) {
-      loadRound(roundList[0].id);
-    }
+    if (roundList.length > 0) loadRound(roundList[0].id);
   }
 
   async function calculateSeasonSkins() {
@@ -43,15 +46,12 @@ export default function SkinsGame() {
     scores.forEach(s => {
       if (!s.players || !s.rounds) return;
       const roundId = s.round_id;
-      if (!roundMap[roundId]) {
-        roundMap[roundId] = { section: s.rounds.holes_played, playerMap: {} };
-      }
+      if (!roundMap[roundId]) roundMap[roundId] = { section: s.rounds.holes_played, playerMap: {} };
       const name = s.players.name;
       if (!roundMap[roundId].playerMap[name]) {
         roundMap[roundId].playerMap[name] = {
           name,
           fullHandicap: s.full_handicap,
-          halfHandicap: s.full_handicap / 2,
           scores: [],
           originalIndex: Object.keys(roundMap[roundId].playerMap).length,
         };
@@ -59,30 +59,33 @@ export default function SkinsGame() {
       roundMap[roundId].playerMap[name].scores.push({ hole: s.hole_number, gross: s.gross_score });
     });
 
-    const fullCounts = {};
-    const halfCounts = {};
+    const counts = { 1: {}, 0.75: {}, 0.5: {}, 0.25: {} };
+
     Object.values(roundMap).forEach(round => {
       const playerList = Object.values(round.playerMap).map(p => ({
         ...p,
         scores: p.scores.sort((a, b) => a.hole - b.hole).map(s => s.gross),
       }));
-      ['full', 'half'].forEach(hdcpType => {
-        const counts = hdcpType === 'full' ? fullCounts : halfCounts;
-        const skins = calculateSkins(playerList, round.section, hdcpType);
+      HDCP_OPTIONS.forEach(({ value: m }) => {
+        const skins = calculateSkins(playerList, round.section, m);
         Object.values(skins).forEach(result => {
           if (result.winner !== 'No Winner') {
-            counts[result.winner] = (counts[result.winner] || 0) + 1;
+            counts[m][result.winner] = (counts[m][result.winner] || 0) + 1;
           }
         });
       });
     });
 
-    const toSorted = counts => Object.entries(counts)
+    const toSorted = c => Object.entries(c)
       .sort((a, b) => b[1] - a[1])
       .map(([name, skins]) => ({ name, skins }));
 
-    setSeasonSkinsFull(toSorted(fullCounts));
-    setSeasonSkinsHalf(toSorted(halfCounts));
+    setSeasonSkins({
+      1: toSorted(counts[1]),
+      0.75: toSorted(counts[0.75]),
+      0.5: toSorted(counts[0.5]),
+      0.25: toSorted(counts[0.25]),
+    });
   }
 
   async function loadRound(roundId) {
@@ -94,29 +97,24 @@ export default function SkinsGame() {
       .eq('id', roundId)
       .single();
 
-    // Fetch only degen players' scores for this round
     const { data: scores } = await supabase
       .from('player_scores')
       .select('hole_number, gross_score, full_handicap, players(id, name)')
       .eq('round_id', roundId);
 
     if (!scores || scores.length === 0) {
-      setPlayers([]);
-      setSkinsResults({});
-      setSelectedRound(roundId);
-      return;
+      setPlayers([]); setSkinsResults({}); setSelectedRound(roundId); return;
     }
 
     const sec = round?.holes_played || 'front';
     setSection(sec);
 
-    // Rebuild player objects from score rows
     const playerMap = {};
     scores.forEach(s => {
       if (!s.players) return;
       const name = s.players.name;
       if (!playerMap[name]) {
-        playerMap[name] = { name, fullHandicap: s.full_handicap, halfHandicap: s.full_handicap / 2, scores: [], originalIndex: Object.keys(playerMap).length };
+        playerMap[name] = { name, fullHandicap: s.full_handicap, scores: [], originalIndex: Object.keys(playerMap).length };
       }
       playerMap[name].scores.push({ hole: s.hole_number, gross: s.gross_score });
     });
@@ -127,77 +125,79 @@ export default function SkinsGame() {
     }));
 
     setPlayers(playerList);
-    setSkinsResults(calculateSkins(playerList, sec, handicapType));
+    setSkinsResults(calculateSkins(playerList, sec, multiplier));
     setSelectedRound(roundId);
   }
 
   const holeHandicaps = getHoleHandicaps(section);
 
-  // Recalculate when handicap type toggle changes
+  // Recalculate when multiplier changes
   React.useEffect(() => {
-    if (players.length > 0) {
-      setSkinsResults(calculateSkins(players, section, handicapType));
-    }
-  }, [handicapType]); // eslint-disable-line
+    if (players.length > 0) setSkinsResults(calculateSkins(players, section, multiplier));
+    setShowAllSkins(false);
+  }, [multiplier]); // eslint-disable-line
+
+  const currentSeasonData = seasonSkins[multiplier] || [];
+  const currentLabel = HDCP_OPTIONS.find(o => o.value === multiplier)?.label;
+
+  // Effective HC for display — multiply and format
+  const effectiveHC = (player) => {
+    const val = player.fullHandicap * multiplier;
+    // Show as integer if whole, otherwise 1 decimal
+    const display = val % 1 === 0 ? val : parseFloat(val.toFixed(2));
+    return formatHandicap(display);
+  };
 
   return (
     <div>
-      {/* Season Skins Leaderboard */}
-      {(seasonSkinsFull.length > 0 || seasonSkinsHalf.length > 0) && (() => {
-        const data = handicapType === 'full' ? seasonSkinsFull : seasonSkinsHalf;
-        const label = handicapType === 'full' ? 'Full Handicap' : 'Half Handicap';
-        return (
-          <div className="card border-0 shadow-sm mb-4 border-matador">
-            <div className="card-header bg-matador-red text-white">
-              <h6 className="mb-0"><i className="bi bi-trophy-fill me-2"></i>Season Skins — {label}</h6>
-            </div>
-            <div className="card-body p-0">
-              <table className="table table-hover mb-0">
-                <thead className="bg-matador-black text-white">
-                  <tr><th>Rank</th><th>Player</th><th className="text-center">Skins</th></tr>
-                </thead>
-                <tbody>
-                  {(showAllSkins ? data : data.slice(0, 3)).map((row, i) => (
-                    <tr key={row.name} className={i === 0 ? 'table-matador-success' : ''}>
-                      <td className="fw-bold">{i + 1}</td>
-                      <td>{row.name}</td>
-                      <td className="text-center"><span className="badge badge-matador">{row.skins}</span></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {data.length > 3 && (
-                <div className="text-center py-2 border-top">
-                  <button className="btn btn-sm btn-link text-muted" onClick={() => setShowAllSkins(s => !s)}>
-                    <i className={`bi bi-chevron-${showAllSkins ? 'up' : 'down'} me-1`}></i>
-                    {showAllSkins ? 'Show less' : `Show all ${data.length} players`}
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      })()}
-
-      <div className="d-flex align-items-center justify-content-end gap-3 mb-4 flex-wrap">
-        <div className="d-flex align-items-center gap-2">
-          <span className="text-muted small fw-semibold">Handicap:</span>
-          <div className="btn-group btn-group-sm">
+      {/* Handicap toggle — top of page so it controls both leaderboard and round view */}
+      <div className="d-flex align-items-center gap-2 mb-4">
+        <span className="text-muted small fw-semibold">Handicap:</span>
+        <div className="btn-group btn-group-sm">
+          {HDCP_OPTIONS.map(opt => (
             <button
-              className={`btn ${handicapType === 'full' ? 'btn-matador' : 'btn-outline-secondary'}`}
-              onClick={() => setHandicapType('full')}
+              key={opt.value}
+              className={`btn ${multiplier === opt.value ? 'btn-matador' : 'btn-outline-secondary'}`}
+              onClick={() => setMultiplier(opt.value)}
             >
-              Full
+              {opt.label}
             </button>
-            <button
-              className={`btn ${handicapType === 'half' ? 'btn-matador' : 'btn-outline-secondary'}`}
-              onClick={() => setHandicapType('half')}
-            >
-              Half
-            </button>
-          </div>
+          ))}
         </div>
       </div>
+
+      {/* Season Skins Leaderboard */}
+      {currentSeasonData.length > 0 && (
+        <div className="card border-0 shadow-sm mb-4 border-matador">
+          <div className="card-header bg-matador-red text-white">
+            <h6 className="mb-0"><i className="bi bi-trophy-fill me-2"></i>Season Skins — {currentLabel} Handicap</h6>
+          </div>
+          <div className="card-body p-0">
+            <table className="table table-hover mb-0">
+              <thead className="bg-matador-black text-white">
+                <tr><th>Rank</th><th>Player</th><th className="text-center">Skins</th></tr>
+              </thead>
+              <tbody>
+                {(showAllSkins ? currentSeasonData : currentSeasonData.slice(0, 3)).map((row, i) => (
+                  <tr key={row.name} className={i === 0 ? 'table-matador-success' : ''}>
+                    <td className="fw-bold">{i + 1}</td>
+                    <td>{row.name}</td>
+                    <td className="text-center"><span className="badge badge-matador">{row.skins}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {currentSeasonData.length > 3 && (
+              <div className="text-center py-2 border-top">
+                <button className="btn btn-sm btn-link text-muted" onClick={() => setShowAllSkins(s => !s)}>
+                  <i className={`bi bi-chevron-${showAllSkins ? 'up' : 'down'} me-1`}></i>
+                  {showAllSkins ? 'Show less' : `Show all ${currentSeasonData.length} players`}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="mb-4">
         <label className="form-label fw-semibold">Select a round:</label>
@@ -213,7 +213,6 @@ export default function SkinsGame() {
         )}
       </div>
 
-      {/* ── Skins Results Table (same as original app) ── */}
       {Object.keys(skinsResults).length > 0 && players.length > 0 && (
         <>
           <div className="card shadow mb-4 border-0 border-matador">
@@ -227,7 +226,7 @@ export default function SkinsGame() {
                   <thead className="bg-matador-black text-white">
                     <tr>
                       <th className="text-start" style={{ minWidth: 130 }}>Player</th>
-                      <th className="text-center">{handicapType === 'half' ? '½ HC' : 'Full HC'}</th>
+                      <th className="text-center">{currentLabel} HC</th>
                       {[...Array(9)].map((_, i) => {
                         const holeNumber = section === 'front' ? i + 1 : i + 10;
                         return (
@@ -243,7 +242,7 @@ export default function SkinsGame() {
                     {players.map(player => (
                       <tr key={player.name}>
                         <td className="fw-bold">{player.name}</td>
-                        <td className="text-center">{formatHandicap(handicapType === 'half' ? player.halfHandicap : player.fullHandicap)}</td>
+                        <td className="text-center">{effectiveHC(player)}</td>
                         {[...Array(9)].map((_, i) => {
                           const holeNumber = section === 'front' ? i + 1 : i + 10;
                           const result = skinsResults[holeNumber];
@@ -304,7 +303,7 @@ export default function SkinsGame() {
       )}
 
       {selectedRound && players.length === 0 && (
-        <div className="alert alert-info">No Degen players found in this round. Make sure players are marked as Degens in the Admin panel.</div>
+        <div className="alert alert-info">No players found in this round.</div>
       )}
     </div>
   );
