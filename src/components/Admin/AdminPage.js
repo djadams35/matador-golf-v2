@@ -1,38 +1,60 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
+import { supabase } from '../../supabaseClient';
 import UploadRound from './UploadRound';
 import ManageTeams from './ManageTeams';
 import ManagePlayers from './ManagePlayers';
 import ManageSchedule from './ManageSchedule';
 import ManageDegens from './ManageDegens';
 import RoundLog from './RoundLog';
-
-// The admin password is hardcoded here (never stored in the database).
-// To change it, edit this file and redeploy.
-const ADMIN_PASSWORD = 'matador2025';
+import ManageAdmins from './ManageAdmins';
 
 export default function AdminPage() {
   const [authenticated, setAuthenticated] = useState(
     () => sessionStorage.getItem('adminAuth') === 'true'
   );
-  const [input, setInput] = useState('');
+  const [currentUsername, setCurrentUsername] = useState(
+    () => sessionStorage.getItem('adminUsername') || ''
+  );
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loggingIn, setLoggingIn] = useState(false);
   const location = useLocation();
 
-  function handleLogin(e) {
+  async function handleLogin(e) {
     e.preventDefault();
-    if (input === ADMIN_PASSWORD) {
-      sessionStorage.setItem('adminAuth', 'true');
-      setAuthenticated(true);
-      setError('');
+    setLoggingIn(true);
+    setError('');
+
+    const { data, error: dbError } = await supabase
+      .from('admin_users')
+      .select('id, username')
+      .eq('username', username.trim().toLowerCase())
+      .eq('password', password)
+      .maybeSingle();
+
+    if (dbError) {
+      setError('Login error: ' + dbError.message);
+    } else if (!data) {
+      setError('Incorrect username or password.');
     } else {
-      setError('Incorrect password.');
+      sessionStorage.setItem('adminAuth', 'true');
+      sessionStorage.setItem('adminUsername', data.username);
+      setCurrentUsername(data.username);
+      setAuthenticated(true);
     }
+
+    setLoggingIn(false);
   }
 
   function handleLogout() {
     sessionStorage.removeItem('adminAuth');
+    sessionStorage.removeItem('adminUsername');
     setAuthenticated(false);
+    setCurrentUsername('');
+    setUsername('');
+    setPassword('');
   }
 
   if (!authenticated) {
@@ -47,18 +69,29 @@ export default function AdminPage() {
               <p className="text-muted mb-3">This page is for the league admin only.</p>
               <form onSubmit={handleLogin}>
                 <div className="mb-3">
+                  <label className="form-label fw-semibold">Username</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={username}
+                    onChange={e => setUsername(e.target.value)}
+                    autoFocus
+                    autoComplete="username"
+                  />
+                </div>
+                <div className="mb-3">
                   <label className="form-label fw-semibold">Password</label>
                   <input
                     type="password"
                     className="form-control"
-                    value={input}
-                    onChange={e => setInput(e.target.value)}
-                    autoFocus
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    autoComplete="current-password"
                   />
                 </div>
                 {error && <div className="alert alert-danger py-2">{error}</div>}
-                <button type="submit" className="btn btn-matador w-100">
-                  Login
+                <button type="submit" className="btn btn-matador w-100" disabled={loggingIn}>
+                  {loggingIn ? <><span className="spinner-border spinner-border-sm me-2"></span>Logging in...</> : 'Login'}
                 </button>
               </form>
             </div>
@@ -69,12 +102,13 @@ export default function AdminPage() {
   }
 
   const tabs = [
-    { path: '/admin',          label: 'Upload Round',   icon: 'cloud-upload' },
-    { path: '/admin/log',      label: 'Round Log',      icon: 'journal-text' },
-    { path: '/admin/teams',    label: 'Teams',          icon: 'people' },
-    { path: '/admin/players',  label: 'Players',        icon: 'person' },
-    { path: '/admin/schedule', label: 'Schedule',       icon: 'calendar3' },
-    { path: '/admin/degens',   label: 'Degens',         icon: 'dice-5' },
+    { path: '/admin',           label: 'Upload Round', icon: 'cloud-upload' },
+    { path: '/admin/log',       label: 'Round Log',    icon: 'journal-text' },
+    { path: '/admin/teams',     label: 'Teams',        icon: 'people' },
+    { path: '/admin/players',   label: 'Players',      icon: 'person' },
+    { path: '/admin/schedule',  label: 'Schedule',     icon: 'calendar3' },
+    { path: '/admin/degens',    label: 'Degens',       icon: 'dice-5' },
+    { path: '/admin/settings',  label: 'Settings',     icon: 'gear' },
   ];
 
   return (
@@ -83,12 +117,14 @@ export default function AdminPage() {
         <h2 className="fw-bold text-matador-red mb-0">
           <i className="bi bi-gear-fill me-2"></i>Admin Panel
         </h2>
-        <button className="btn btn-outline-secondary btn-sm" onClick={handleLogout}>
-          <i className="bi bi-box-arrow-right me-1"></i>Logout
-        </button>
+        <div className="d-flex align-items-center gap-2">
+          <span className="text-muted small"><i className="bi bi-person-circle me-1"></i>{currentUsername}</span>
+          <button className="btn btn-outline-secondary btn-sm" onClick={handleLogout}>
+            <i className="bi bi-box-arrow-right me-1"></i>Logout
+          </button>
+        </div>
       </div>
 
-      {/* Tab navigation */}
       <ul className="nav nav-pills flex-wrap gap-1 mb-4">
         {tabs.map(tab => (
           <li className="nav-item" key={tab.path}>
@@ -109,6 +145,7 @@ export default function AdminPage() {
         <Route path="players" element={<ManagePlayers />} />
         <Route path="schedule" element={<ManageSchedule />} />
         <Route path="degens" element={<ManageDegens />} />
+        <Route path="settings" element={<ManageAdmins currentUsername={currentUsername} />} />
       </Routes>
     </div>
   );
