@@ -181,75 +181,80 @@ export default function PlayerLeaderboards() {
   return (
     <div>
 
-      {/* ── Handicap Tracker ── */}
-      {hcChanges.length > 0 && (
-        <div className="card border-0 shadow-sm mb-4">
-          <div className="card-header bg-matador-black text-white">
-            <h6 className="mb-0"><i className="bi bi-graph-down-arrow me-2"></i>Handicap Tracker</h6>
-          </div>
-          <div className="card-body p-0">
-            <table className="table table-hover mb-0">
-              <thead className="table-light">
-                <tr>
-                  <th>Player</th>
-                  <th className="text-center">Wk {hcChanges[0]?.startWeek} HC</th>
-                  <th className="text-center">Current HC</th>
-                  <th className="text-center">Change</th>
-                </tr>
-              </thead>
-              <tbody>
-                {hcChanges.map(p => (
-                  <tr key={p.name}>
-                    <td className="fw-semibold">{p.name}</td>
-                    <td className="text-center text-muted">{formatHandicap(p.startHC)}</td>
-                    <td className="text-center fw-bold">{formatHandicap(p.currentHC)}</td>
-                    <td className="text-center fw-bold">
-                      {p.change === 0
-                        ? <span className="text-muted">—</span>
-                        : p.change > 0
-                          ? <span className="text-success">▼ {p.change}</span>
-                          : <span className="text-danger">▲ {Math.abs(p.change)}</span>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="card-footer text-muted small">▼ = improved &nbsp;·&nbsp; ▲ = higher handicap</div>
-        </div>
-      )}
+      {/* ── Handicap Tracker + Power Rankings side by side ── */}
+      {(hcChanges.length > 0 || powerRankings.length > 0) && (
+        <div className="row g-4 mb-4">
+          {hcChanges.length > 0 && (
+            <div className="col-12 col-md-6">
+              <div className="card border-0 shadow-sm h-100">
+                <div className="card-header bg-matador-black text-white">
+                  <h6 className="mb-0"><i className="bi bi-graph-down-arrow me-2"></i>Handicap Tracker</h6>
+                </div>
+                <div className="card-body p-0">
+                  <table className="table table-hover mb-0">
+                    <thead className="table-light">
+                      <tr>
+                        <th>Player</th>
+                        <th className="text-center">Wk {hcChanges[0]?.startWeek} HC</th>
+                        <th className="text-center">Current HC</th>
+                        <th className="text-center">Change</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {hcChanges.map(p => (
+                        <tr key={p.name}>
+                          <td className="fw-semibold">{p.name}</td>
+                          <td className="text-center text-muted">{formatHandicap(p.startHC)}</td>
+                          <td className="text-center fw-bold">{formatHandicap(p.currentHC)}</td>
+                          <td className="text-center fw-bold">
+                            {p.change === 0
+                              ? <span className="text-muted">—</span>
+                              : p.change > 0
+                                ? <span className="text-success">▼ {p.change}</span>
+                                : <span className="text-danger">▲ {Math.abs(p.change)}</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="card-footer text-muted small">▼ = improved &nbsp;·&nbsp; ▲ = higher handicap</div>
+              </div>
+            </div>
+          )}
 
-      {/* ── Power Rankings ── */}
-      {powerRankings.length > 0 && (
-        <div className="card border-0 shadow-sm mb-4">
-          <div className="card-header bg-matador-black text-white d-flex justify-content-between align-items-center">
-            <h6 className="mb-0"><i className="bi bi-fire me-2 text-warning"></i>Power Rankings</h6>
-            <span className="text-muted small">Avg net — last {last3Weeks.length} week{last3Weeks.length > 1 ? 's' : ''} (Wk {[...last3Weeks].sort((a,b)=>a-b).join(', ')})</span>
-          </div>
-          <div className="card-body p-0">
-            <table className="table table-hover mb-0">
-              <thead className="table-light">
-                <tr>
-                  <th>#</th>
-                  <th>Player</th>
-                  <th className="text-center">Avg Net</th>
-                  <th className="text-center">Wks</th>
-                </tr>
-              </thead>
-              <tbody>
-                {powerRankings.map((p, i) => (
-                  <tr key={p.name} className={i === 0 ? 'table-warning' : ''}>
-                    <td>
-                      {i === 0 ? '🔥' : i + 1}
-                    </td>
-                    <td className="fw-semibold">{p.name}</td>
-                    <td className="text-center fw-bold">{p.avgNet}</td>
-                    <td className="text-center text-muted small">{p.weeksPlayed}/{last3Weeks.length}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {powerRankings.length > 0 && (
+            <div className="col-12 col-md-6">
+              <div className="card border-0 shadow-sm h-100">
+                <div className="card-header bg-matador-black text-white d-flex justify-content-between align-items-center">
+                  <h6 className="mb-0"><i className="bi bi-fire me-2 text-warning"></i>Power Rankings</h6>
+                  <span className="text-muted small">Wk {[...last3Weeks].sort((a,b)=>a-b).join(', ')}</span>
+                </div>
+                <div className="card-body p-0">
+                  <table className="table table-hover mb-0">
+                    <thead className="table-light">
+                      <tr>
+                        <th>#</th>
+                        <th>Player</th>
+                        <th className="text-center">Avg Net</th>
+                        <th className="text-center">Wks</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {powerRankings.map((p, i) => (
+                        <tr key={p.name} className={i === 0 ? 'table-warning' : ''}>
+                          <td>{i === 0 ? '🔥' : i + 1}</td>
+                          <td className="fw-semibold">{p.name}</td>
+                          <td className="text-center fw-bold">{p.avgNet}</td>
+                          <td className="text-center text-muted small">{p.weeksPlayed}/{last3Weeks.length}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
