@@ -141,9 +141,9 @@ export default function MatchResults() {
 
     if (!error && data) {
       setResults(data);
-      const uniqueWeeks = [...new Set(data.map(r => r.week_number).filter(Boolean))].sort((a, b) => b - a);
+      const uniqueWeeks = [...new Set(data.map(r => r.week_number).filter(Boolean))].sort((a, b) => a - b);
       setWeeks(uniqueWeeks);
-      if (uniqueWeeks.length > 0) setSelectedWeek(uniqueWeeks[0]);
+      if (uniqueWeeks.length > 0) setSelectedWeek(uniqueWeeks[uniqueWeeks.length - 1]);
     }
     setLoading(false);
   }

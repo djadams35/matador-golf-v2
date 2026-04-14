@@ -125,9 +125,9 @@ export default function WeeklyLowNet() {
     setWeeklyResults(results);
 
     // Build sorted week list for the selector (most recent first)
-    const uniqueWeeks = [...new Set(results.map(r => r.week).filter(Boolean))].sort((a, b) => b - a);
+    const uniqueWeeks = [...new Set(results.map(r => r.week).filter(Boolean))].sort((a, b) => a - b);
     setWeeks(uniqueWeeks);
-    if (uniqueWeeks.length > 0) setSelectedWeek(uniqueWeeks[0]);
+    if (uniqueWeeks.length > 0) setSelectedWeek(uniqueWeeks[uniqueWeeks.length - 1]);
 
     // Season summary: count wins by baseName so sub labels don't clutter the leaderboard
     const winCounts = {};
