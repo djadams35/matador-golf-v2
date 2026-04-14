@@ -199,19 +199,22 @@ export default function SkinsGame() {
         </div>
       )}
 
-      <div className="mb-4">
-        <label className="form-label fw-semibold">Select a round:</label>
-        {loading ? <div className="spinner-border spinner-border-sm text-matador-red ms-2"></div> : (
-          <select className="form-select" onChange={e => loadRound(e.target.value)} value={selectedRound || ''}>
-            <option value="">-- Choose a round --</option>
-            {rounds.map(r => (
-              <option key={r.id} value={r.id}>
-                {r.played_date || 'Unknown date'} — {r.holes_played === 'front' ? 'Front 9' : 'Back 9'}{r.week_number ? ` (Week ${r.week_number})` : ''}
-              </option>
+      {!loading && rounds.length > 0 && (
+        <div className="d-flex align-items-center gap-2 mb-4">
+          <span className="text-muted small fw-semibold">Week:</span>
+          <div className="btn-group btn-group-sm">
+            {[...rounds].reverse().map(r => (
+              <button
+                key={r.id}
+                className={`btn ${selectedRound === r.id ? 'btn-matador' : 'btn-outline-secondary'}`}
+                onClick={() => loadRound(r.id)}
+              >
+                {r.week_number ? r.week_number : (r.played_date || 'Unknown')}
+              </button>
             ))}
-          </select>
-        )}
-      </div>
+          </div>
+        </div>
+      )}
 
       {Object.keys(skinsResults).length > 0 && players.length > 0 && (
         <>
