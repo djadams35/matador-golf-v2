@@ -95,7 +95,7 @@ function HoleTable({ playerA, playerB, scoreMap, section, aTeamName, bTeamName }
             <td colSpan={2} className="text-muted small">Total</td>
             <td className="text-center">{aTotalGross} ({aTotalNet})</td>
             <td className="text-center">{bTotalGross} ({bTotalNet})</td>
-            <td className="text-center fw-bold">{aTotalGross + bTotalGross} ({aTotalNet + bTotalNet})</td>
+            <td></td>
             <td></td>
           </tr>
           <tr className="table-dark">
