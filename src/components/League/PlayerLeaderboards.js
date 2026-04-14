@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
-import { strokesReceived, getHoleHandicaps } from '../../utils/handicapUtils';
+import { strokesReceived, getHoleHandicaps, formatHandicap } from '../../utils/handicapUtils';
 
 export default function PlayerLeaderboards() {
   const [data, setData] = useState(null);
@@ -23,7 +23,7 @@ export default function PlayerLeaderboards() {
 
     const { data: scores } = await supabase
       .from('player_scores')
-      .select('player_id, hole_number, gross_score, full_handicap, players(name), rounds(holes_played, played_date, par_scores)')
+      .select('player_id, hole_number, gross_score, full_handicap, players(name), rounds(holes_played, played_date, par_scores, week_number)')
       .order('rounds(played_date)');
 
     if (!scores) { setLoading(false); return; }
@@ -46,7 +46,14 @@ export default function PlayerLeaderboards() {
           grossEagles: 0, grossBirdies: 0, grossPars: 0,
           netEagles: 0, netBirdies: 0, netPars: 0,
           bestGross: null, bestNet: null,
+          hcHistory: {},   // weekNum -> handicap
+          netByWeek: {},   // weekNum -> net total (filled from round_net_totals)
         };
+      }
+
+      // Track handicap per week (all holes in a round have the same value — just overwrite)
+      if (row.rounds.week_number != null) {
+        playerStats[name].hcHistory[row.rounds.week_number] = row.full_handicap;
       }
 
       if (par !== null) {
@@ -68,16 +75,18 @@ export default function PlayerLeaderboards() {
 
     const { data: netTotals } = await supabase
       .from('round_net_totals')
-      .select('player_id, net_total, gross_total, players(name)');
+      .select('player_id, net_total, gross_total, players(name), rounds(week_number)');
 
     if (netTotals) {
       netTotals.forEach(row => {
         if (!row.players) return;
         const name = row.players.name;
-        if (playerStats[name] && rosterNames.has(name)) {
-          playerStats[name].grossScores.push(row.gross_total);
-          playerStats[name].netScores.push(row.net_total);
-          playerStats[name].rounds++;
+        if (!playerStats[name] || !rosterNames.has(name)) return;
+        playerStats[name].grossScores.push(row.gross_total);
+        playerStats[name].netScores.push(row.net_total);
+        playerStats[name].rounds++;
+        if (row.rounds?.week_number != null) {
+          playerStats[name].netByWeek[row.rounds.week_number] = row.net_total;
         }
       });
     }
@@ -98,6 +107,7 @@ export default function PlayerLeaderboards() {
   if (loading) return <div className="text-center py-5"><span className="spinner-border text-matador-red"></span></div>;
   if (!data || data.length === 0) return <div className="alert alert-info">No data yet. Upload rounds to see leaderboards.</div>;
 
+  // ── Sorting for toggle-dependent tables ────────────────────────────────────
   const byBestGross   = [...data].filter(p => p.bestGross !== null).sort((a, b) => a.bestGross - b.bestGross);
   const byBestNet     = [...data].filter(p => p.bestNet !== null).sort((a, b) => a.bestNet - b.bestNet);
   const byAvgGross    = [...data].filter(p => p.avgGross).sort((a, b) => parseFloat(a.avgGross) - parseFloat(b.avgGross));
@@ -108,6 +118,36 @@ export default function PlayerLeaderboards() {
   const byNetEagles   = [...data].filter(p => p.netEagles > 0).sort((a, b) => b.netEagles - a.netEagles);
   const byNetBirds    = [...data].filter(p => p.netBirdies > 0).sort((a, b) => b.netBirdies - a.netBirdies);
   const byNetPars     = [...data].filter(p => p.netPars > 0).sort((a, b) => b.netPars - a.netPars);
+
+  // ── Handicap tracker ───────────────────────────────────────────────────────
+  const hcChanges = data
+    .filter(p => Object.keys(p.hcHistory).length >= 1)
+    .map(p => {
+      const weeks = Object.keys(p.hcHistory).map(Number).sort((a, b) => a - b);
+      const startWeek = weeks[0];
+      const currentWeek = weeks[weeks.length - 1];
+      const startHC = p.hcHistory[startWeek];
+      const currentHC = p.hcHistory[currentWeek];
+      const change = startHC - currentHC; // positive = improved (HC went down)
+      return { name: p.name, startWeek, startHC, currentWeek, currentHC, change };
+    })
+    .sort((a, b) => b.change - a.change); // most improved first
+
+  // ── Power rankings (last 3 weeks) ──────────────────────────────────────────
+  const allWeekNums = [...new Set(
+    data.flatMap(p => Object.keys(p.netByWeek).map(Number))
+  )].sort((a, b) => b - a);
+  const last3Weeks = allWeekNums.slice(0, 3);
+
+  const powerRankings = data
+    .map(p => {
+      const weekScores = last3Weeks.map(w => p.netByWeek[w]).filter(s => s !== undefined);
+      if (weekScores.length === 0) return null;
+      const avg = weekScores.reduce((a, b) => a + b, 0) / weekScores.length;
+      return { name: p.name, weeksPlayed: weekScores.length, avgNet: parseFloat(avg.toFixed(1)), weekScores };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.avgNet - b.avgNet);
 
   function LeaderTable({ title, rows, valueKey, label, icon }) {
     return (
@@ -140,7 +180,80 @@ export default function PlayerLeaderboards() {
 
   return (
     <div>
-      {/* Toggle */}
+
+      {/* ── Handicap Tracker ── */}
+      {hcChanges.length > 0 && (
+        <div className="card border-0 shadow-sm mb-4">
+          <div className="card-header bg-matador-black text-white">
+            <h6 className="mb-0"><i className="bi bi-graph-down-arrow me-2"></i>Handicap Tracker</h6>
+          </div>
+          <div className="card-body p-0">
+            <table className="table table-hover mb-0">
+              <thead className="table-light">
+                <tr>
+                  <th>Player</th>
+                  <th className="text-center">Wk {hcChanges[0]?.startWeek} HC</th>
+                  <th className="text-center">Current HC</th>
+                  <th className="text-center">Change</th>
+                </tr>
+              </thead>
+              <tbody>
+                {hcChanges.map(p => (
+                  <tr key={p.name}>
+                    <td className="fw-semibold">{p.name}</td>
+                    <td className="text-center text-muted">{formatHandicap(p.startHC)}</td>
+                    <td className="text-center fw-bold">{formatHandicap(p.currentHC)}</td>
+                    <td className="text-center fw-bold">
+                      {p.change === 0
+                        ? <span className="text-muted">—</span>
+                        : p.change > 0
+                          ? <span className="text-success">▼ {p.change}</span>
+                          : <span className="text-danger">▲ {Math.abs(p.change)}</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="card-footer text-muted small">▼ = improved &nbsp;·&nbsp; ▲ = higher handicap</div>
+        </div>
+      )}
+
+      {/* ── Power Rankings ── */}
+      {powerRankings.length > 0 && (
+        <div className="card border-0 shadow-sm mb-4">
+          <div className="card-header bg-matador-black text-white d-flex justify-content-between align-items-center">
+            <h6 className="mb-0"><i className="bi bi-fire me-2 text-warning"></i>Power Rankings</h6>
+            <span className="text-muted small">Avg net — last {last3Weeks.length} week{last3Weeks.length > 1 ? 's' : ''} (Wk {[...last3Weeks].sort((a,b)=>a-b).join(', ')})</span>
+          </div>
+          <div className="card-body p-0">
+            <table className="table table-hover mb-0">
+              <thead className="table-light">
+                <tr>
+                  <th>#</th>
+                  <th>Player</th>
+                  <th className="text-center">Avg Net</th>
+                  <th className="text-center">Wks</th>
+                </tr>
+              </thead>
+              <tbody>
+                {powerRankings.map((p, i) => (
+                  <tr key={p.name} className={i === 0 ? 'table-warning' : ''}>
+                    <td>
+                      {i === 0 ? '🔥' : i + 1}
+                    </td>
+                    <td className="fw-semibold">{p.name}</td>
+                    <td className="text-center fw-bold">{p.avgNet}</td>
+                    <td className="text-center text-muted small">{p.weeksPlayed}/{last3Weeks.length}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── Net / Gross toggle ── */}
       <div className="d-flex align-items-center gap-2 mb-4">
         <span className="text-muted small fw-semibold">View:</span>
         <div className="btn-group btn-group-sm">
