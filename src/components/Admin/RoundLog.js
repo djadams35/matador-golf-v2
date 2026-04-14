@@ -10,6 +10,8 @@ export default function RoundLog() {
   const [editing, setEditing] = useState({}); // roundId -> { played_date, week_number }
   const [saving, setSaving] = useState({});
   const [recalculating, setRecalculating] = useState({});
+  const [recalcingAll, setRecalcingAll] = useState(false);
+  const [recalcAllProgress, setRecalcAllProgress] = useState(null);
 
   useEffect(() => { fetchRounds(); }, []);
 
@@ -66,64 +68,61 @@ export default function RoundLog() {
     }
   }
 
+  // Core recalc logic — used by both single-round and recalc-all
+  async function doRecalc(round) {
+    const { data: scoreRows, error: scoresError } = await supabase
+      .from('player_scores')
+      .select('player_id, hole_number, gross_score, full_handicap, players(name)')
+      .eq('round_id', round.id);
+
+    if (scoresError) throw new Error('Failed to fetch scores: ' + scoresError.message);
+    if (!scoreRows || scoreRows.length === 0) throw new Error('No scores found for this round.');
+
+    const section = round.holes_played;
+    const startHole = section === 'front' ? 1 : 10;
+    const byPlayerId = {};
+
+    for (const row of scoreRows) {
+      const name = row.players?.name;
+      if (!name) continue;
+      if (!byPlayerId[row.player_id]) {
+        byPlayerId[row.player_id] = { name, fullHandicap: row.full_handicap, scores: new Array(9).fill(0) };
+      }
+      const idx = row.hole_number - startHole;
+      if (idx >= 0 && idx < 9) {
+        byPlayerId[row.player_id].scores[idx] = row.gross_score;
+      }
+    }
+
+    const players = Object.values(byPlayerId);
+    const playerNameToId = {};
+    for (const [id, p] of Object.entries(byPlayerId)) {
+      playerNameToId[p.name] = id;
+    }
+
+    await supabase.from('skins_results').delete().eq('round_id', round.id);
+    const skins = calculateSkins(players, section);
+    const skinsRows = Object.entries(skins).map(([hole, result]) => ({
+      round_id: round.id,
+      hole_number: parseInt(hole),
+      winner_player_id: result.winner !== 'No Winner' ? playerNameToId[result.winner] : null,
+      winner_name: result.winner !== 'No Winner' ? result.winner : null,
+    }));
+    const { error: skinsError } = await supabase.from('skins_results').insert(skinsRows);
+    if (skinsError) throw new Error('Skins insert failed: ' + skinsError.message);
+
+    if (round.week_number) {
+      await supabase.from('match_results').delete().eq('round_id', round.id);
+      await recalcMatchPlay(round.id, round.week_number, players, section);
+    }
+  }
+
   async function recalculateRound(round) {
     if (!window.confirm(`Recalculate skins and match results for "${round.file_name}"? This overwrites existing skins and match results for this round.`)) return;
-
     setRecalculating(prev => ({ ...prev, [round.id]: true }));
     setMessage(null);
-
     try {
-      // 1. Fetch saved player scores for this round
-      const { data: scoreRows, error: scoresError } = await supabase
-        .from('player_scores')
-        .select('player_id, hole_number, gross_score, full_handicap, players(name)')
-        .eq('round_id', round.id);
-
-      if (scoresError) throw new Error('Failed to fetch scores: ' + scoresError.message);
-      if (!scoreRows || scoreRows.length === 0) throw new Error('No scores found for this round.');
-
-      // 2. Reconstruct players array from stored scores
-      const section = round.holes_played; // 'front' or 'back'
-      const startHole = section === 'front' ? 1 : 10;
-      const byPlayerId = {};
-
-      for (const row of scoreRows) {
-        const name = row.players?.name;
-        if (!name) continue;
-        if (!byPlayerId[row.player_id]) {
-          byPlayerId[row.player_id] = { name, fullHandicap: row.full_handicap, scores: new Array(9).fill(0) };
-        }
-        const idx = row.hole_number - startHole;
-        if (idx >= 0 && idx < 9) {
-          byPlayerId[row.player_id].scores[idx] = row.gross_score;
-        }
-      }
-
-      const players = Object.values(byPlayerId);
-      const playerNameToId = {};
-      for (const [id, p] of Object.entries(byPlayerId)) {
-        playerNameToId[p.name] = id;
-      }
-
-      // 3. Recalculate and replace skins_results
-      await supabase.from('skins_results').delete().eq('round_id', round.id);
-
-      const skins = calculateSkins(players, section);
-      const skinsRows = Object.entries(skins).map(([hole, result]) => ({
-        round_id: round.id,
-        hole_number: parseInt(hole),
-        winner_player_id: result.winner !== 'No Winner' ? playerNameToId[result.winner] : null,
-        winner_name: result.winner !== 'No Winner' ? result.winner : null,
-      }));
-      const { error: skinsError } = await supabase.from('skins_results').insert(skinsRows);
-      if (skinsError) throw new Error('Skins insert failed: ' + skinsError.message);
-
-      // 4. Recalculate and replace match_results (only if week_number is set)
-      if (round.week_number) {
-        await supabase.from('match_results').delete().eq('round_id', round.id);
-        await recalcMatchPlay(round.id, round.week_number, players, section);
-      }
-
+      await doRecalc(round);
       const matchNote = round.week_number ? ' and match results' : ' (no week # — match play skipped)';
       setMessage({ type: 'success', text: `Recalculated skins${matchNote} for "${round.file_name}"` });
     } catch (err) {
@@ -131,6 +130,30 @@ export default function RoundLog() {
     } finally {
       setRecalculating(prev => ({ ...prev, [round.id]: false }));
     }
+  }
+
+  async function recalculateAll() {
+    if (!window.confirm(`Recalculate skins and match results for all ${rounds.length} round(s)? This overwrites all existing skins and match results.`)) return;
+    setRecalcingAll(true);
+    setMessage(null);
+    let done = 0, failed = 0;
+    for (const round of rounds) {
+      setRecalcAllProgress(`Processing "${round.file_name}" (${done + 1} of ${rounds.length})…`);
+      try {
+        await doRecalc(round);
+        done++;
+      } catch (err) {
+        failed++;
+      }
+    }
+    setRecalcAllProgress(null);
+    setRecalcingAll(false);
+    setMessage({
+      type: failed > 0 ? 'error' : 'success',
+      text: failed > 0
+        ? `Recalculated ${done} round(s). ${failed} failed — check round data.`
+        : `All ${done} round(s) recalculated successfully.`,
+    });
   }
 
   async function recalcMatchPlay(roundId, weekNumber, players, section) {
@@ -185,7 +208,23 @@ export default function RoundLog() {
 
   return (
     <div>
-      <h5 className="fw-bold mb-3"><i className="bi bi-journal-text me-2 text-matador-red"></i>Round Log</h5>
+      <div className="d-flex justify-content-between align-items-center mb-3">
+        <h5 className="fw-bold mb-0"><i className="bi bi-journal-text me-2 text-matador-red"></i>Round Log</h5>
+        <button
+          className="btn btn-sm btn-outline-primary"
+          onClick={recalculateAll}
+          disabled={recalcingAll || rounds.length === 0}
+          title="Recalculate skins and match results for every uploaded round"
+        >
+          {recalcingAll
+            ? <><span className="spinner-border spinner-border-sm me-1"></span>Recalculating…</>
+            : <><i className="bi bi-arrow-repeat me-1"></i>Recalculate All</>}
+        </button>
+      </div>
+
+      {recalcAllProgress && (
+        <div className="alert alert-info py-2 mb-3">{recalcAllProgress}</div>
+      )}
 
       {message && (
         <div className={`alert alert-${message.type === 'error' ? 'danger' : 'success'} py-2 mb-3`}>
