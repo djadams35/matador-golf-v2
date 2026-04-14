@@ -5,6 +5,8 @@ import { formatHandicap } from '../../utils/handicapUtils';
 export default function WeeklyLowNet() {
   const [weeklyResults, setWeeklyResults] = useState([]);
   const [seasonSummary, setSeasonSummary] = useState([]);
+  const [weeks, setWeeks] = useState([]);
+  const [selectedWeek, setSelectedWeek] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => { fetchData(); }, []);
@@ -122,6 +124,11 @@ export default function WeeklyLowNet() {
 
     setWeeklyResults(results);
 
+    // Build sorted week list for the selector (most recent first)
+    const uniqueWeeks = [...new Set(results.map(r => r.week).filter(Boolean))].sort((a, b) => b - a);
+    setWeeks(uniqueWeeks);
+    if (uniqueWeeks.length > 0) setSelectedWeek(uniqueWeeks[0]);
+
     // Season summary: count wins by baseName so sub labels don't clutter the leaderboard
     const winCounts = {};
     results.forEach(r => {
@@ -168,11 +175,29 @@ export default function WeeklyLowNet() {
       )}
 
       {/* Weekly breakdown */}
-      <h5 className="fw-bold mb-3">Weekly Results</h5>
+      <div className="d-flex align-items-center gap-3 mb-3 flex-wrap">
+        <h5 className="fw-bold mb-0">Weekly Results</h5>
+        {weeks.length > 1 && (
+          <div className="d-flex align-items-center gap-2">
+            <span className="text-muted small fw-semibold">Week:</span>
+            <div className="btn-group btn-group-sm">
+              {weeks.map(w => (
+                <button
+                  key={w}
+                  className={`btn ${selectedWeek === w ? 'btn-matador' : 'btn-outline-secondary'}`}
+                  onClick={() => setSelectedWeek(w)}
+                >
+                  {w}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
       {weeklyResults.length === 0 && (
         <div className="alert alert-info">No rounds uploaded yet. Upload rounds in the Admin panel.</div>
       )}
-      {weeklyResults.map(round => (
+      {weeklyResults.filter(r => r.week === selectedWeek).map(round => (
         <div className="card border-0 shadow-sm mb-3" key={round.roundId}>
           <div className="card-header bg-matador-black text-white d-flex justify-content-between">
             <span>
