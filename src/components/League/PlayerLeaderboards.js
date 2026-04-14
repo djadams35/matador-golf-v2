@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
+import { strokesReceived, getHoleHandicaps } from '../../utils/handicapUtils';
 
 export default function PlayerLeaderboards() {
   const [data, setData] = useState(null);
@@ -42,16 +43,26 @@ export default function PlayerLeaderboards() {
         playerStats[name] = {
           name, rounds: 0,
           grossScores: [], netScores: [],
-          eagles: 0, birdies: 0, pars: 0,
+          grossEagles: 0, grossBirdies: 0, grossPars: 0,
+          netEagles: 0, netBirdies: 0, netPars: 0,
           bestGross: null, bestNet: null,
         };
       }
 
       if (par !== null) {
-        const diff = row.gross_score - par;
-        if (diff <= -2) playerStats[name].eagles++;
-        else if (diff === -1) playerStats[name].birdies++;
-        else if (diff === 0) playerStats[name].pars++;
+        const holeHandicaps = getHoleHandicaps(section);
+        const strokes = strokesReceived(row.full_handicap, holeHandicaps[holeIndex]);
+        const netScore = row.gross_score - strokes;
+
+        const grossDiff = row.gross_score - par;
+        if (grossDiff <= -2) playerStats[name].grossEagles++;
+        else if (grossDiff === -1) playerStats[name].grossBirdies++;
+        else if (grossDiff === 0) playerStats[name].grossPars++;
+
+        const netDiff = netScore - par;
+        if (netDiff <= -2) playerStats[name].netEagles++;
+        else if (netDiff === -1) playerStats[name].netBirdies++;
+        else if (netDiff === 0) playerStats[name].netPars++;
       }
     });
 
@@ -87,13 +98,16 @@ export default function PlayerLeaderboards() {
   if (loading) return <div className="text-center py-5"><span className="spinner-border text-matador-red"></span></div>;
   if (!data || data.length === 0) return <div className="alert alert-info">No data yet. Upload rounds to see leaderboards.</div>;
 
-  const byBestGross = [...data].filter(p => p.bestGross !== null).sort((a, b) => a.bestGross - b.bestGross);
-  const byBestNet   = [...data].filter(p => p.bestNet !== null).sort((a, b) => a.bestNet - b.bestNet);
-  const byAvgGross  = [...data].filter(p => p.avgGross).sort((a, b) => parseFloat(a.avgGross) - parseFloat(b.avgGross));
-  const byAvgNet    = [...data].filter(p => p.avgNet).sort((a, b) => parseFloat(a.avgNet) - parseFloat(b.avgNet));
-  const byEagles    = [...data].filter(p => p.eagles > 0).sort((a, b) => b.eagles - a.eagles);
-  const byBirdies   = [...data].filter(p => p.birdies > 0).sort((a, b) => b.birdies - a.birdies);
-  const byPars      = [...data].filter(p => p.pars > 0).sort((a, b) => b.pars - a.pars);
+  const byBestGross   = [...data].filter(p => p.bestGross !== null).sort((a, b) => a.bestGross - b.bestGross);
+  const byBestNet     = [...data].filter(p => p.bestNet !== null).sort((a, b) => a.bestNet - b.bestNet);
+  const byAvgGross    = [...data].filter(p => p.avgGross).sort((a, b) => parseFloat(a.avgGross) - parseFloat(b.avgGross));
+  const byAvgNet      = [...data].filter(p => p.avgNet).sort((a, b) => parseFloat(a.avgNet) - parseFloat(b.avgNet));
+  const byGrossEagles = [...data].filter(p => p.grossEagles > 0).sort((a, b) => b.grossEagles - a.grossEagles);
+  const byGrossBirds  = [...data].filter(p => p.grossBirdies > 0).sort((a, b) => b.grossBirdies - a.grossBirdies);
+  const byGrossPars   = [...data].filter(p => p.grossPars > 0).sort((a, b) => b.grossPars - a.grossPars);
+  const byNetEagles   = [...data].filter(p => p.netEagles > 0).sort((a, b) => b.netEagles - a.netEagles);
+  const byNetBirds    = [...data].filter(p => p.netBirdies > 0).sort((a, b) => b.netBirdies - a.netBirdies);
+  const byNetPars     = [...data].filter(p => p.netPars > 0).sort((a, b) => b.netPars - a.netPars);
 
   function LeaderTable({ title, rows, valueKey, label, icon }) {
     return (
@@ -157,13 +171,13 @@ export default function PlayerLeaderboards() {
           </div>
           <div className="row g-4">
             <div className="col-12 col-md-4">
-              <LeaderTable title="Eagles" rows={byEagles} valueKey="eagles" label="Eagles" icon="bi-star-fill" />
+              <LeaderTable title="Eagles (Net)" rows={byNetEagles} valueKey="netEagles" label="Eagles" icon="bi-star-fill" />
             </div>
             <div className="col-12 col-md-4">
-              <LeaderTable title="Birdies" rows={byBirdies} valueKey="birdies" label="Birdies" icon="bi-arrow-down-circle-fill" />
+              <LeaderTable title="Birdies (Net)" rows={byNetBirds} valueKey="netBirdies" label="Birdies" icon="bi-arrow-down-circle-fill" />
             </div>
             <div className="col-12 col-md-4">
-              <LeaderTable title="Pars" rows={byPars} valueKey="pars" label="Pars" icon="bi-check-circle-fill" />
+              <LeaderTable title="Pars (Net)" rows={byNetPars} valueKey="netPars" label="Pars" icon="bi-check-circle-fill" />
             </div>
           </div>
         </>
@@ -181,13 +195,13 @@ export default function PlayerLeaderboards() {
           </div>
           <div className="row g-4">
             <div className="col-12 col-md-4">
-              <LeaderTable title="Eagles" rows={byEagles} valueKey="eagles" label="Eagles" icon="bi-star-fill" />
+              <LeaderTable title="Eagles (Gross)" rows={byGrossEagles} valueKey="grossEagles" label="Eagles" icon="bi-star-fill" />
             </div>
             <div className="col-12 col-md-4">
-              <LeaderTable title="Birdies" rows={byBirdies} valueKey="birdies" label="Birdies" icon="bi-arrow-down-circle-fill" />
+              <LeaderTable title="Birdies (Gross)" rows={byGrossBirds} valueKey="grossBirdies" label="Birdies" icon="bi-arrow-down-circle-fill" />
             </div>
             <div className="col-12 col-md-4">
-              <LeaderTable title="Pars" rows={byPars} valueKey="pars" label="Pars" icon="bi-check-circle-fill" />
+              <LeaderTable title="Pars (Gross)" rows={byGrossPars} valueKey="grossPars" label="Pars" icon="bi-check-circle-fill" />
             </div>
           </div>
         </>

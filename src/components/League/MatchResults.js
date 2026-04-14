@@ -1,20 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
 import { getHoleHandicaps, formatHandicap } from '../../utils/handicapUtils';
 
 function HoleTable({ playerA, playerB, scoreMap, section, aTeamName, bTeamName }) {
   const holeHandicaps = getHoleHandicaps(section);
 
-  // Pre-calculate all hole results so we can build running score
-  let runningScore = 0; // positive = A leads, negative = B leads
+  let runningScore = 0;
 
   const aFirstName = playerA ? playerA.split(' ')[0] : '';
   const bFirstName = playerB ? playerB.split(' ')[0] : '';
   const aHandicap = scoreMap[playerA] ? Object.values(scoreMap[playerA])[0]?.fullHandicap : null;
   const bHandicap = scoreMap[playerB] ? Object.values(scoreMap[playerB])[0]?.fullHandicap : null;
 
-  // Match play uses handicap difference method:
-  // the higher-HC player receives (diff) strokes on the diff hardest holes.
   const hcDiff = aHandicap !== null && bHandicap !== null ? aHandicap - bHandicap : 0;
   const absDiff = Math.abs(hcDiff) % 1 !== 0 ? Math.ceil(Math.abs(hcDiff)) : Math.abs(hcDiff);
 
@@ -35,6 +32,11 @@ function HoleTable({ playerA, playerB, scoreMap, section, aTeamName, bTeamName }
     const snap = runningScore;
     return { holeNumber, si, aScore, bScore, aNet, bNet, aStrokes, bStrokes, winner, runningScore: snap };
   });
+
+  const aTotalGross = holes.reduce((s, h) => s + (h.aScore?.gross ?? 0), 0);
+  const bTotalGross = holes.reduce((s, h) => s + (h.bScore?.gross ?? 0), 0);
+  const aTotalNet   = holes.reduce((s, h) => s + (h.aNet   ?? 0), 0);
+  const bTotalNet   = holes.reduce((s, h) => s + (h.bNet   ?? 0), 0);
 
   return (
     <div className="table-responsive">
@@ -89,6 +91,13 @@ function HoleTable({ playerA, playerB, scoreMap, section, aTeamName, bTeamName }
           <span className="text-danger me-1">●</span> Player receives a stroke on this hole &nbsp;·&nbsp; Score format: Gross (Net)
         </caption>
         <tfoot>
+          <tr className="table-secondary fw-semibold">
+            <td colSpan={2} className="text-muted small">Total</td>
+            <td className="text-center">{aTotalGross} ({aTotalNet})</td>
+            <td className="text-center">{bTotalGross} ({bTotalNet})</td>
+            <td></td>
+            <td></td>
+          </tr>
           <tr className="table-dark">
             <td colSpan={4} className="fw-bold">
               {runningScore === 0
@@ -110,6 +119,8 @@ function HoleTable({ playerA, playerB, scoreMap, section, aTeamName, bTeamName }
 
 export default function MatchResults() {
   const [results, setResults] = useState([]);
+  const [weeks, setWeeks] = useState([]);
+  const [selectedWeek, setSelectedWeek] = useState(null);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState({});
   const [loadingDetails, setLoadingDetails] = useState({});
@@ -127,7 +138,13 @@ export default function MatchResults() {
         rounds(played_date, holes_played)
       `)
       .order('week_number', { ascending: false });
-    if (!error) setResults(data || []);
+
+    if (!error && data) {
+      setResults(data);
+      const uniqueWeeks = [...new Set(data.map(r => r.week_number).filter(Boolean))].sort((a, b) => b - a);
+      setWeeks(uniqueWeeks);
+      if (uniqueWeeks.length > 0) setSelectedWeek(uniqueWeeks[0]);
+    }
     setLoading(false);
   }
 
@@ -180,9 +197,29 @@ export default function MatchResults() {
   if (loading) return <div className="text-center py-5"><span className="spinner-border text-matador-red"></span></div>;
   if (results.length === 0) return <div className="alert alert-info">No match results yet. Upload rounds with a week number to see results here.</div>;
 
+  const weekResults = results.filter(r => r.week_number === selectedWeek);
+
   return (
     <div>
-      {results.map(r => {
+      {/* Week selector */}
+      {weeks.length > 1 && (
+        <div className="d-flex align-items-center gap-2 mb-4">
+          <span className="text-muted small fw-semibold">Week:</span>
+          <div className="btn-group btn-group-sm">
+            {weeks.map(w => (
+              <button
+                key={w}
+                className={`btn ${selectedWeek === w ? 'btn-matador' : 'btn-outline-secondary'}`}
+                onClick={() => { setSelectedWeek(w); setExpanded({}); }}
+              >
+                {w}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {weekResults.map(r => {
         const low = r.low_match_detail || {};
         const high = r.high_match_detail || {};
         const team = r.team_point_detail || {};
