@@ -227,7 +227,7 @@ export default function PlayerLeaderboards() {
             <div className="col-12 col-md-6">
               <div className="card border-0 shadow-sm h-100">
                 <div className="card-header bg-matador-black text-white d-flex justify-content-between align-items-center">
-                  <h6 className="mb-0"><i className="bi bi-fire me-2 text-warning"></i>Power Rankings</h6>
+                  <h6 className="mb-0"><i className="bi bi-fire me-2 text-warning"></i>Power Rankings — Last {last3Weeks.length} Week{last3Weeks.length > 1 ? 's' : ''}</h6>
                   <span className="text-muted small">Wk {[...last3Weeks].sort((a,b)=>a-b).join(', ')}</span>
                 </div>
                 <div className="card-body p-0">
