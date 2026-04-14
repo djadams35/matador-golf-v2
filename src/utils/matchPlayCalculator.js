@@ -1,4 +1,4 @@
-import { strokesReceived, getHoleHandicaps } from './handicapUtils';
+import { getHoleHandicaps } from './handicapUtils';
 
 /**
  * Calculate match play results for a week.
@@ -58,17 +58,13 @@ export function calculateMatchPlay(teamA, teamB, section) {
   const lowMatch  = playMatch(aLow,  bLow);
   const highMatch = playMatch(aHigh, bHigh);
 
-  // Team point: combined net score for all players over all holes
+  // Team point: each player's gross total minus their full handicap (simple subtraction, not hole-by-hole)
   const teamANet = [...teamA.players].reduce((sum, p) => {
-    return sum + p.scores.reduce((s, gross, i) => {
-      return s + gross - strokesReceived(p.fullHandicap, holeHandicaps[i]);
-    }, 0);
+    return sum + p.scores.reduce((s, g) => s + g, 0) - p.fullHandicap;
   }, 0);
 
   const teamBNet = [...teamB.players].reduce((sum, p) => {
-    return sum + p.scores.reduce((s, gross, i) => {
-      return s + gross - strokesReceived(p.fullHandicap, holeHandicaps[i]);
-    }, 0);
+    return sum + p.scores.reduce((s, g) => s + g, 0) - p.fullHandicap;
   }, 0);
 
   const teamPoint = {
