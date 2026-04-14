@@ -169,14 +169,31 @@ export default function RoundLog() {
     const { data: teamRosters } = await supabase
       .from('team_players')
       .select('team_id, player_id, players(name)')
-      .in('team_id', teamIds);
+      .in('team_id', teamIds)
+      .eq('is_sub', false);
 
     if (!teamRosters) return;
+
+    // Fetch sub mappings for this round so absent players are replaced by their sub
+    const { data: roundSubs } = await supabase
+      .from('round_subs')
+      .select('original_player_id, players!round_subs_sub_player_id_fkey(name)')
+      .eq('round_id', roundId);
+
+    // originalPlayerId -> sub player name
+    const subNameMap = {};
+    (roundSubs || []).forEach(s => {
+      if (s.players?.name) subNameMap[s.original_player_id] = s.players.name;
+    });
 
     const buildTeam = (teamId) => {
       const rosterPlayers = (teamRosters || [])
         .filter(r => r.team_id === teamId)
-        .map(r => players.find(p => p.name === r.players.name))
+        .map(r => {
+          // Try permanent player first; fall back to their sub if absent
+          return players.find(p => p.name === r.players.name)
+            || (subNameMap[r.player_id] ? players.find(p => p.name === subNameMap[r.player_id]) : null);
+        })
         .filter(Boolean);
       return { players: rosterPlayers };
     };
