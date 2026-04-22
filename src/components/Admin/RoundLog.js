@@ -20,7 +20,7 @@ export default function RoundLog() {
     const { data, error } = await supabase
       .from('rounds')
       .select('*')
-      .order('created_at', { ascending: false });
+      .order('week_number', { ascending: false });
     if (error) setMessage({ type: 'error', text: error.message });
     else setRounds(data || []);
     setLoading(false);
