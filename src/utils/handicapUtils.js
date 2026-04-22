@@ -34,8 +34,11 @@ export function getHoleHandicaps(section) {
  */
 export function strokesReceived(handicap, holeStrokeIndex) {
   if (handicap >= 0) {
-    const threshold = handicap % 1 !== 0 ? Math.ceil(handicap) : handicap;
-    return holeStrokeIndex <= threshold ? 1 : 0;
+    // For HC > 9, player gets multiple strokes on some holes.
+    // base = full passes through all 9 holes; remainder holes get one extra stroke.
+    const base = Math.floor(handicap / 9);
+    const remainder = handicap % 9;
+    return base + (holeStrokeIndex <= Math.ceil(remainder) ? 1 : 0);
   } else {
     // Plus handicap: gives strokes starting from the easiest hole (highest SI)
     const n = Math.abs(handicap) % 1 !== 0 ? Math.ceil(Math.abs(handicap)) : Math.abs(handicap);
