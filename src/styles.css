@@ -1,8 +1,8 @@
-/* Matador brand colors and global styles */
+/* Brand colors and global styles */
 :root {
-  --matador-red: #E31B23;
-  --matador-red-dark: #C9151C;
-  --matador-black: #222222;
+  --matador-red: #16A34A;
+  --matador-red-dark: #15803D;
+  --matador-black: #1E3A8A;
 }
 
 body {
@@ -40,7 +40,7 @@ body {
   border-width: 2px !important;
 }
 .table-matador-success {
-  background-color: #FFEAEB !important;
+  background-color: #DCFCE7 !important;
   color: var(--matador-black);
   font-weight: 700;
 }
@@ -58,7 +58,7 @@ body {
 .upload-zone.drag-active {
   border-color: var(--matador-red);
   border-width: 3px;
-  background-color: #fff5f5;
+  background-color: #F0FDF4;
 }
 
 /* Section tabs */
