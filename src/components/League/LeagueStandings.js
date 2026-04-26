@@ -19,20 +19,31 @@ export default function LeagueStandings() {
 
     const { data: matches, error: matchError } = await supabase
       .from('match_results')
-      .select('team_a_id, team_b_id, team_a_points, team_b_points, low_match_detail, high_match_detail');
+      .select('team_a_id, team_b_id, team_a_points, team_b_points, team_point_winner, low_match_detail, high_match_detail');
     if (matchError) { setError(matchError.message); setLoading(false); return; }
 
-    // Build per-player individual match records from stored JSON details
-    const playerRecords = {};
+    // Individual match points per player (from stored JSON details)
+    const playerPoints = {};  // name -> points
+    // Track which team each player appeared for (to identify subs)
+    const playerTeamMap = {}; // name -> Set of team_ids
+
     matches.forEach(match => {
-      [match.low_match_detail, match.high_match_detail].forEach(detail => {
+      const detailTeams = [
+        { detail: match.low_match_detail,  teamA: match.team_a_id, teamB: match.team_b_id },
+        { detail: match.high_match_detail, teamA: match.team_a_id, teamB: match.team_b_id },
+      ];
+      detailTeams.forEach(({ detail, teamA, teamB }) => {
         if (!detail) return;
         const { playerA, playerB, winner } = detail;
-        if (!playerRecords[playerA]) playerRecords[playerA] = { wins: 0, losses: 0, ties: 0 };
-        if (!playerRecords[playerB]) playerRecords[playerB] = { wins: 0, losses: 0, ties: 0 };
-        if (winner === 'A') { playerRecords[playerA].wins++; playerRecords[playerB].losses++; }
-        else if (winner === 'B') { playerRecords[playerB].wins++; playerRecords[playerA].losses++; }
-        else { playerRecords[playerA].ties++; playerRecords[playerB].ties++; }
+        if (playerPoints[playerA] === undefined) playerPoints[playerA] = 0;
+        if (playerPoints[playerB] === undefined) playerPoints[playerB] = 0;
+        if (!playerTeamMap[playerA]) playerTeamMap[playerA] = new Set();
+        if (!playerTeamMap[playerB]) playerTeamMap[playerB] = new Set();
+        playerTeamMap[playerA].add(teamA);
+        playerTeamMap[playerB].add(teamB);
+        if (winner === 'A') { playerPoints[playerA] += 1; }
+        else if (winner === 'B') { playerPoints[playerB] += 1; }
+        else { playerPoints[playerA] += 0.5; playerPoints[playerB] += 0.5; }
       });
     });
 
@@ -48,6 +59,7 @@ export default function LeagueStandings() {
         wins: 0,
         losses: 0,
         ties: 0,
+        teamNetPts: 0,
         matchesPlayed: 0,
       };
     });
@@ -65,6 +77,11 @@ export default function LeagueStandings() {
       if (match.team_a_points > match.team_b_points) { a.wins++; b.losses++; }
       else if (match.team_b_points > match.team_a_points) { b.wins++; a.losses++; }
       else { a.ties++; b.ties++; }
+
+      // Team net point
+      if (match.team_point_winner === match.team_a_id) { a.teamNetPts += 1; }
+      else if (match.team_point_winner === match.team_b_id) { b.teamNetPts += 1; }
+      else { a.teamNetPts += 0.5; b.teamNetPts += 0.5; }
     });
 
     const sorted = Object.values(teamStats)
@@ -72,17 +89,22 @@ export default function LeagueStandings() {
         if (b.points !== a.points) return b.points - a.points;
         return b.wins - a.wins;
       })
-      .map((team, i) => ({
-        ...team,
-        rank: i + 1,
-        pct: team.matchesPlayed > 0
-          ? ((team.points / (team.matchesPlayed * 3)) * 100).toFixed(1) + '%'
-          : '—',
-        playerDetails: team.playerNames.map(name => ({
-          name,
-          record: playerRecords[name] || { wins: 0, losses: 0, ties: 0 },
-        })),
-      }));
+      .map((team, i) => {
+        // Subs: appeared in this team's matches but not on permanent roster
+        const subDetails = Object.entries(playerPoints)
+          .filter(([name]) => !team.playerNames.includes(name) && playerTeamMap[name]?.has(team.id))
+          .map(([name, pts]) => ({ name, points: pts }));
+
+        return {
+          ...team,
+          rank: i + 1,
+          playerDetails: team.playerNames.map(name => ({
+            name,
+            points: playerPoints[name] ?? 0,
+          })),
+          subDetails,
+        };
+      });
 
     setStandings(sorted);
     setLoading(false);
@@ -118,7 +140,6 @@ export default function LeagueStandings() {
                   <th>Team</th>
                   <th className="d-none d-md-table-cell">Players</th>
                   <th className="text-center">Pts</th>
-                  <th className="text-center d-none d-sm-table-cell">Pct</th>
                   <th style={{ width: 32 }}></th>
                 </tr>
               </thead>
@@ -136,25 +157,31 @@ export default function LeagueStandings() {
                         <td className="fw-bold">{team.name}</td>
                         <td className="text-muted d-none d-md-table-cell small">{team.players}</td>
                         <td className="text-center fw-bold">{team.points}</td>
-                        <td className="text-center d-none d-sm-table-cell text-muted">{team.pct}</td>
                         <td className="text-center text-muted">
                           <i className={`bi bi-chevron-${isExpanded ? 'up' : 'down'} small`}></i>
                         </td>
                       </tr>
                       {isExpanded && (
                         <tr className="table-light">
-                          <td colSpan={6} className="px-4 py-3">
+                          <td colSpan={5} className="px-4 py-3">
                             <div className="d-flex flex-wrap gap-4">
-                              <div>
-                                <div className="text-muted small fw-semibold mb-1">Team Record</div>
-                                <div className="fw-bold">{team.wins}–{team.losses}–{team.ties}</div>
-                                <div className="text-muted" style={{ fontSize: '0.75rem' }}>W–L–T (weekly)</div>
-                              </div>
                               {team.playerDetails.map(p => (
                                 <div key={p.name}>
                                   <div className="text-muted small fw-semibold mb-1">{p.name}</div>
-                                  <div className="fw-bold">{p.record.wins}–{p.record.losses}–{p.record.ties}</div>
-                                  <div className="text-muted" style={{ fontSize: '0.75rem' }}>W–L–T (individual)</div>
+                                  <div className="fw-bold">{p.points} pts</div>
+                                  <div className="text-muted" style={{ fontSize: '0.75rem' }}>individual</div>
+                                </div>
+                              ))}
+                              <div>
+                                <div className="text-muted small fw-semibold mb-1">Team Net</div>
+                                <div className="fw-bold">{team.teamNetPts} pts</div>
+                                <div className="text-muted" style={{ fontSize: '0.75rem' }}>net strokes</div>
+                              </div>
+                              {team.subDetails.map(s => (
+                                <div key={s.name}>
+                                  <div className="text-muted small fw-semibold mb-1">{s.name} <span className="badge bg-secondary" style={{ fontSize: '0.65rem' }}>sub</span></div>
+                                  <div className="fw-bold">{s.points} pts</div>
+                                  <div className="text-muted" style={{ fontSize: '0.75rem' }}>individual</div>
                                 </div>
                               ))}
                             </div>
