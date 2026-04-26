@@ -5,31 +5,45 @@ export default function LeagueStandings() {
   const [standings, setStandings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [expandedTeam, setExpandedTeam] = useState(null);
 
   useEffect(() => { fetchStandings(); }, []);
 
   async function fetchStandings() {
     setLoading(true);
 
-    // Get all teams
     const { data: teams, error: teamsError } = await supabase
       .from('teams')
       .select('id, name, team_players(player_id, players(name))');
     if (teamsError) { setError(teamsError.message); setLoading(false); return; }
 
-    // Get all match results
     const { data: matches, error: matchError } = await supabase
       .from('match_results')
-      .select('team_a_id, team_b_id, team_a_points, team_b_points');
+      .select('team_a_id, team_b_id, team_a_points, team_b_points, low_match_detail, high_match_detail');
     if (matchError) { setError(matchError.message); setLoading(false); return; }
 
-    // Calculate standings for each team
+    // Build per-player individual match records from stored JSON details
+    const playerRecords = {};
+    matches.forEach(match => {
+      [match.low_match_detail, match.high_match_detail].forEach(detail => {
+        if (!detail) return;
+        const { playerA, playerB, winner } = detail;
+        if (!playerRecords[playerA]) playerRecords[playerA] = { wins: 0, losses: 0, ties: 0 };
+        if (!playerRecords[playerB]) playerRecords[playerB] = { wins: 0, losses: 0, ties: 0 };
+        if (winner === 'A') { playerRecords[playerA].wins++; playerRecords[playerB].losses++; }
+        else if (winner === 'B') { playerRecords[playerB].wins++; playerRecords[playerA].losses++; }
+        else { playerRecords[playerA].ties++; playerRecords[playerB].ties++; }
+      });
+    });
+
     const teamStats = {};
     teams.forEach(team => {
+      const playerNames = team.team_players?.map(tp => tp.players?.name).filter(Boolean) || [];
       teamStats[team.id] = {
         id: team.id,
         name: team.name,
-        players: team.team_players?.map(tp => tp.players?.name).filter(Boolean).join(' & ') || '',
+        players: playerNames.join(' & '),
+        playerNames,
         points: 0,
         wins: 0,
         losses: 0,
@@ -48,9 +62,6 @@ export default function LeagueStandings() {
       a.matchesPlayed++;
       b.matchesPlayed++;
 
-      // Count wins/losses/ties per individual point
-      // Each match has 3 points available; we count the total points won as the record
-      // Win = 2+ points in a week, Loss = 1 or less, Tie = exactly 1.5 each
       if (match.team_a_points > match.team_b_points) { a.wins++; b.losses++; }
       else if (match.team_b_points > match.team_a_points) { b.wins++; a.losses++; }
       else { a.ties++; b.ties++; }
@@ -67,10 +78,18 @@ export default function LeagueStandings() {
         pct: team.matchesPlayed > 0
           ? ((team.points / (team.matchesPlayed * 3)) * 100).toFixed(1) + '%'
           : '—',
+        playerDetails: team.playerNames.map(name => ({
+          name,
+          record: playerRecords[name] || { wins: 0, losses: 0, ties: 0 },
+        })),
       }));
 
     setStandings(sorted);
     setLoading(false);
+  }
+
+  function toggleExpand(teamId) {
+    setExpandedTeam(prev => prev === teamId ? null : teamId);
   }
 
   if (loading) return <div className="text-center py-5"><span className="spinner-border text-matador-red"></span></div>;
@@ -99,25 +118,52 @@ export default function LeagueStandings() {
                   <th>Team</th>
                   <th className="d-none d-md-table-cell">Players</th>
                   <th className="text-center">Pts</th>
-                  <th className="text-center">W</th>
-                  <th className="text-center">L</th>
-                  <th className="text-center">T</th>
                   <th className="text-center d-none d-sm-table-cell">Pct</th>
+                  <th style={{ width: 32 }}></th>
                 </tr>
               </thead>
               <tbody>
-                {standings.map((team, i) => (
-                  <tr key={team.id} className={i === 0 ? 'table-matador-success' : ''}>
-                    <td className="fw-bold text-matador-red">{team.rank}</td>
-                    <td className="fw-bold">{team.name}</td>
-                    <td className="text-muted d-none d-md-table-cell small">{team.players}</td>
-                    <td className="text-center fw-bold">{team.points}</td>
-                    <td className="text-center">{team.wins}</td>
-                    <td className="text-center">{team.losses}</td>
-                    <td className="text-center">{team.ties}</td>
-                    <td className="text-center d-none d-sm-table-cell text-muted">{team.pct}</td>
-                  </tr>
-                ))}
+                {standings.map((team, i) => {
+                  const isExpanded = expandedTeam === team.id;
+                  return (
+                    <React.Fragment key={team.id}>
+                      <tr
+                        className={i === 0 ? 'table-matador-success' : ''}
+                        onClick={() => toggleExpand(team.id)}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <td className="fw-bold text-matador-red">{team.rank}</td>
+                        <td className="fw-bold">{team.name}</td>
+                        <td className="text-muted d-none d-md-table-cell small">{team.players}</td>
+                        <td className="text-center fw-bold">{team.points}</td>
+                        <td className="text-center d-none d-sm-table-cell text-muted">{team.pct}</td>
+                        <td className="text-center text-muted">
+                          <i className={`bi bi-chevron-${isExpanded ? 'up' : 'down'} small`}></i>
+                        </td>
+                      </tr>
+                      {isExpanded && (
+                        <tr className="table-light">
+                          <td colSpan={6} className="px-4 py-3">
+                            <div className="d-flex flex-wrap gap-4">
+                              <div>
+                                <div className="text-muted small fw-semibold mb-1">Team Record</div>
+                                <div className="fw-bold">{team.wins}–{team.losses}–{team.ties}</div>
+                                <div className="text-muted" style={{ fontSize: '0.75rem' }}>W–L–T (weekly)</div>
+                              </div>
+                              {team.playerDetails.map(p => (
+                                <div key={p.name}>
+                                  <div className="text-muted small fw-semibold mb-1">{p.name}</div>
+                                  <div className="fw-bold">{p.record.wins}–{p.record.losses}–{p.record.ties}</div>
+                                  <div className="text-muted" style={{ fontSize: '0.75rem' }}>W–L–T (individual)</div>
+                                </div>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>
