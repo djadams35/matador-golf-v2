@@ -178,13 +178,13 @@ export default function WeeklyLowNet() {
       <div className="d-flex align-items-center gap-3 mb-3 flex-wrap">
         <h5 className="fw-bold mb-0">Weekly Results</h5>
         {weeks.length > 1 && (
-          <div className="d-flex align-items-center gap-2">
+          <div className="d-flex align-items-center gap-2 flex-wrap">
             <span className="text-muted small fw-semibold">Week:</span>
-            <div className="btn-group btn-group-sm">
+            <div className="d-flex flex-wrap gap-1">
               {weeks.map(w => (
                 <button
                   key={w}
-                  className={`btn ${selectedWeek === w ? 'btn-matador' : 'btn-outline-secondary'}`}
+                  className={`btn btn-sm ${selectedWeek === w ? 'btn-matador' : 'btn-outline-secondary'}`}
                   onClick={() => setSelectedWeek(w)}
                 >
                   {w}

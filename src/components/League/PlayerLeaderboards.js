@@ -230,6 +230,7 @@ export default function PlayerLeaderboards() {
                   <h6 className="mb-0"><i className="bi bi-graph-down-arrow me-2"></i>Handicap Tracker</h6>
                 </div>
                 <div className="card-body p-0">
+                  <div className="table-responsive">
                   <table className="table table-hover mb-0">
                     <thead className="table-light">
                       <tr>
@@ -257,6 +258,8 @@ export default function PlayerLeaderboards() {
                     </tbody>
                   </table>
                 </div>
+                  </div>
+                </div>
                 <div className="card-footer text-muted small">▼ = improved &nbsp;·&nbsp; ▲ = higher handicap</div>
               </div>
             </div>
@@ -270,6 +273,7 @@ export default function PlayerLeaderboards() {
                   <span className="text-muted small">Wk {[...last3Weeks].sort((a,b)=>a-b).join(', ')}</span>
                 </div>
                 <div className="card-body p-0">
+                  <div className="table-responsive">
                   <table className="table table-hover mb-0">
                     <thead className="table-light">
                       <tr>
@@ -292,6 +296,8 @@ export default function PlayerLeaderboards() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+                  </div>
                 </div>
                 <div className="card-footer text-muted small">Rating = avg net + total match pts, normalized 0–100</div>
               </div>

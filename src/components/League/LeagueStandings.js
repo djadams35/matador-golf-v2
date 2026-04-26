@@ -173,7 +173,7 @@ export default function LeagueStandings() {
                       {isExpanded && (
                         <tr className="table-light">
                           <td colSpan={5} className="px-4 py-3">
-                            <div className="d-flex flex-wrap gap-4">
+                            <div className="d-flex flex-wrap gap-3">
                               {team.playerDetails.map(p => (
                                 <div key={p.name}>
                                   <div className="text-muted small fw-semibold mb-1">{p.name}</div>

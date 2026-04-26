@@ -46,11 +46,11 @@ function HoleTable({ playerA, playerB, scoreMap, section, aTeamName, bTeamName }
             <th>Hole</th>
             <th className="text-center text-muted">Hole HC</th>
             <th className="text-center">
-              {playerA}
+              {aFirstName}
               {aHandicap !== null && <div className="fw-normal text-muted small">HC {formatHandicap(aHandicap)}</div>}
             </th>
             <th className="text-center">
-              {playerB}
+              {bFirstName}
               {bHandicap !== null && <div className="fw-normal text-muted small">HC {formatHandicap(bHandicap)}</div>}
             </th>
             <th className="text-center">Result</th>
@@ -203,13 +203,13 @@ export default function MatchResults() {
     <div>
       {/* Week selector */}
       {weeks.length > 1 && (
-        <div className="d-flex align-items-center gap-2 mb-4">
+        <div className="d-flex align-items-center gap-2 mb-4 flex-wrap">
           <span className="text-muted small fw-semibold">Week:</span>
-          <div className="btn-group btn-group-sm">
+          <div className="d-flex flex-wrap gap-1">
             {weeks.map(w => (
               <button
                 key={w}
-                className={`btn ${selectedWeek === w ? 'btn-matador' : 'btn-outline-secondary'}`}
+                className={`btn btn-sm ${selectedWeek === w ? 'btn-matador' : 'btn-outline-secondary'}`}
                 onClick={() => { setSelectedWeek(w); setExpanded({}); }}
               >
                 {w}
@@ -230,11 +230,13 @@ export default function MatchResults() {
 
         return (
           <div className="card border-0 shadow-sm mb-3" key={r.id}>
-            <div className="card-header bg-matador-black text-white d-flex justify-content-between">
-              <span>{aName} vs {bName}{r.week_number ? ` — Week ${r.week_number}` : ''}{r.rounds?.played_date ? ` — ${r.rounds.played_date}` : ''}</span>
-              <span className="badge bg-light text-dark">
-                {r.rounds?.holes_played === 'front' ? 'Front 9' : 'Back 9'}
-              </span>
+            <div className="card-header bg-matador-black text-white">
+              <div className="d-flex justify-content-between align-items-start gap-2">
+                <span className="small">{aName} vs {bName}{r.week_number ? ` — Week ${r.week_number}` : ''}{r.rounds?.played_date ? ` — ${r.rounds.played_date}` : ''}</span>
+                <span className="badge bg-light text-dark flex-shrink-0">
+                  {r.rounds?.holes_played === 'front' ? 'Front 9' : 'Back 9'}
+                </span>
+              </div>
             </div>
             <div className="card-body">
               <div className="d-flex justify-content-between align-items-center mb-3">
@@ -251,6 +253,7 @@ export default function MatchResults() {
                 </div>
               </div>
 
+              <div className="table-responsive">
               <table className="table table-sm table-bordered mb-0">
                 <thead className="table-light">
                   <tr><th>Match</th><th>Players</th><th className="text-center">Result</th></tr>
@@ -294,6 +297,7 @@ export default function MatchResults() {
                   </tr>
                 </tbody>
               </table>
+              </div>
 
               <button
                 className="btn btn-sm btn-outline-secondary mt-3 w-100"

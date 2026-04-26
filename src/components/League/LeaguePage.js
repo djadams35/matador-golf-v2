@@ -21,7 +21,7 @@ export default function LeaguePage() {
         <i className="bi bi-trophy me-2"></i>League
       </h2>
 
-      <ul className="nav nav-pills flex-wrap gap-1 mb-4">
+      <ul className="nav nav-pills flex-wrap gap-1 mb-4" style={{ overflowX: 'auto', flexWrap: 'wrap' }}>
         {tabs.map(tab => (
           <li className="nav-item" key={tab.path}>
             <Link

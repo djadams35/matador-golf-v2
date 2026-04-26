@@ -200,13 +200,13 @@ export default function SkinsGame() {
       )}
 
       {!loading && rounds.length > 0 && (
-        <div className="d-flex align-items-center gap-2 mb-4">
+        <div className="d-flex align-items-center gap-2 mb-4 flex-wrap">
           <span className="text-muted small fw-semibold">Week:</span>
-          <div className="btn-group btn-group-sm">
+          <div className="d-flex flex-wrap gap-1">
             {[...rounds].reverse().map(r => (
               <button
                 key={r.id}
-                className={`btn ${selectedRound === r.id ? 'btn-matador' : 'btn-outline-secondary'}`}
+                className={`btn btn-sm ${selectedRound === r.id ? 'btn-matador' : 'btn-outline-secondary'}`}
                 onClick={() => loadRound(r.id)}
               >
                 {r.week_number ? r.week_number : (r.played_date || 'Unknown')}
