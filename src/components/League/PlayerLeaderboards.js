@@ -168,22 +168,21 @@ export default function PlayerLeaderboards() {
       if (weekScores.length === 0) return null;
       const avgNet = parseFloat((weekScores.reduce((a, b) => a + b, 0) / weekScores.length).toFixed(1));
       const totalPts = playerMatchPts[p.name] || 0;
-      const ptsPer = parseFloat((totalPts / weekScores.length).toFixed(2));
-      return { name: p.name, weeksPlayed: weekScores.length, avgNet, ptsPer };
+      return { name: p.name, weeksPlayed: weekScores.length, avgNet, totalPts };
     })
     .filter(Boolean);
 
   // Normalize both metrics to 0–1 and combine 50/50
   // Net: lower is better → invert. Points: higher is better → keep.
   const nets = prRaw.map(p => p.avgNet);
-  const pts  = prRaw.map(p => p.ptsPer);
+  const pts  = prRaw.map(p => p.totalPts);
   const minNet = Math.min(...nets), maxNet = Math.max(...nets);
   const minPts = Math.min(...pts),  maxPts = Math.max(...pts);
 
   const powerRankings = prRaw
     .map(p => {
       const netNorm = maxNet === minNet ? 0.5 : (maxNet - p.avgNet) / (maxNet - minNet);
-      const ptsNorm = maxPts === minPts ? 0.5 : (p.ptsPer - minPts) / (maxPts - minPts);
+      const ptsNorm = maxPts === minPts ? 0.5 : (p.totalPts - minPts) / (maxPts - minPts);
       const rating  = Math.round((netNorm + ptsNorm) / 2 * 100);
       return { ...p, rating };
     })
@@ -278,7 +277,7 @@ export default function PlayerLeaderboards() {
                         <th>Player</th>
                         <th className="text-center">Rating</th>
                         <th className="text-center">Avg Net</th>
-                        <th className="text-center">Pts/Rd</th>
+                        <th className="text-center">Pts</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -288,13 +287,13 @@ export default function PlayerLeaderboards() {
                           <td className="fw-semibold">{p.name}</td>
                           <td className="text-center fw-bold">{p.rating}</td>
                           <td className="text-center text-muted small">{p.avgNet}</td>
-                          <td className="text-center text-muted small">{p.ptsPer}</td>
+                          <td className="text-center text-muted small">{p.totalPts}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
-                <div className="card-footer text-muted small">Rating = avg net + match pts per round, normalized 0–100</div>
+                <div className="card-footer text-muted small">Rating = avg net + total match pts, normalized 0–100</div>
               </div>
             </div>
           )}
