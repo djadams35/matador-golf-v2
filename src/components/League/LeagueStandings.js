@@ -178,13 +178,13 @@ export default function LeagueStandings() {
                                 <div key={p.name}>
                                   <div className="text-muted small fw-semibold mb-1">{p.name}</div>
                                   <div className="fw-bold">{p.points} pts</div>
-                                  <div className="text-muted" style={{ fontSize: '0.75rem' }}>{p.wins}–{p.losses}–{p.ties} W–L–T</div>
+                                  <div className="text-muted" style={{ fontSize: '0.75rem' }}>{p.wins}–{p.losses}–{p.ties}</div>
                                 </div>
                               ))}
                               <div>
                                 <div className="text-muted small fw-semibold mb-1">Team Net</div>
                                 <div className="fw-bold">{team.teamNetPts} pts</div>
-                                <div className="text-muted" style={{ fontSize: '0.75rem' }}>{team.teamNetWins}–{team.teamNetLosses}–{team.teamNetTies} W–L–T</div>
+                                <div className="text-muted" style={{ fontSize: '0.75rem' }}>{team.teamNetWins}–{team.teamNetLosses}–{team.teamNetTies}</div>
                               </div>
                               {team.subDetails.map(s => (
                                 <div key={s.name}>
@@ -192,7 +192,7 @@ export default function LeagueStandings() {
                                     {s.name} <span className="badge bg-secondary" style={{ fontSize: '0.65rem' }}>sub</span>
                                   </div>
                                   <div className="fw-bold">{s.points} pts</div>
-                                  <div className="text-muted" style={{ fontSize: '0.75rem' }}>{s.wins}–{s.losses}–{s.ties} W–L–T</div>
+                                  <div className="text-muted" style={{ fontSize: '0.75rem' }}>{s.wins}–{s.losses}–{s.ties}</div>
                                 </div>
                               ))}
                             </div>
