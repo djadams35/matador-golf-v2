@@ -4,6 +4,7 @@ import { strokesReceived, getHoleHandicaps, formatHandicap } from '../../utils/h
 
 export default function PlayerLeaderboards() {
   const [data, setData] = useState(null);
+  const [matchResults, setMatchResults] = useState([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState('net');
 
@@ -100,6 +101,11 @@ export default function PlayerLeaderboards() {
       }
     });
 
+    const { data: matchRows } = await supabase
+      .from('match_results')
+      .select('week_number, low_match_detail, high_match_detail');
+    setMatchResults(matchRows || []);
+
     setData(Object.values(playerStats).filter(p => p.rounds > 0));
     setLoading(false);
   }
@@ -139,15 +145,49 @@ export default function PlayerLeaderboards() {
   )].sort((a, b) => b - a);
   const last3Weeks = allWeekNums.slice(0, 3);
 
-  const powerRankings = data
+  // Individual match points earned in the last 3 weeks
+  const playerMatchPts = {};
+  matchResults
+    .filter(r => last3Weeks.includes(r.week_number))
+    .forEach(row => {
+      [row.low_match_detail, row.high_match_detail].forEach(detail => {
+        if (!detail) return;
+        const { playerA, playerB, winner } = detail;
+        if (playerMatchPts[playerA] === undefined) playerMatchPts[playerA] = 0;
+        if (playerMatchPts[playerB] === undefined) playerMatchPts[playerB] = 0;
+        if (winner === 'A') playerMatchPts[playerA] += 1;
+        else if (winner === 'B') playerMatchPts[playerB] += 1;
+        else { playerMatchPts[playerA] += 0.5; playerMatchPts[playerB] += 0.5; }
+      });
+    });
+
+  // Build raw stats per player
+  const prRaw = data
     .map(p => {
       const weekScores = last3Weeks.map(w => p.netByWeek[w]).filter(s => s !== undefined);
       if (weekScores.length === 0) return null;
-      const avg = weekScores.reduce((a, b) => a + b, 0) / weekScores.length;
-      return { name: p.name, weeksPlayed: weekScores.length, avgNet: parseFloat(avg.toFixed(1)), weekScores };
+      const avgNet = parseFloat((weekScores.reduce((a, b) => a + b, 0) / weekScores.length).toFixed(1));
+      const totalPts = playerMatchPts[p.name] || 0;
+      const ptsPer = parseFloat((totalPts / weekScores.length).toFixed(2));
+      return { name: p.name, weeksPlayed: weekScores.length, avgNet, ptsPer };
     })
-    .filter(Boolean)
-    .sort((a, b) => a.avgNet - b.avgNet);
+    .filter(Boolean);
+
+  // Normalize both metrics to 0–1 and combine 50/50
+  // Net: lower is better → invert. Points: higher is better → keep.
+  const nets = prRaw.map(p => p.avgNet);
+  const pts  = prRaw.map(p => p.ptsPer);
+  const minNet = Math.min(...nets), maxNet = Math.max(...nets);
+  const minPts = Math.min(...pts),  maxPts = Math.max(...pts);
+
+  const powerRankings = prRaw
+    .map(p => {
+      const netNorm = maxNet === minNet ? 0.5 : (maxNet - p.avgNet) / (maxNet - minNet);
+      const ptsNorm = maxPts === minPts ? 0.5 : (p.ptsPer - minPts) / (maxPts - minPts);
+      const rating  = Math.round((netNorm + ptsNorm) / 2 * 100);
+      return { ...p, rating };
+    })
+    .sort((a, b) => b.rating - a.rating);
 
   function LeaderTable({ title, rows, valueKey, label, icon }) {
     return (
@@ -236,8 +276,9 @@ export default function PlayerLeaderboards() {
                       <tr>
                         <th>#</th>
                         <th>Player</th>
+                        <th className="text-center">Rating</th>
                         <th className="text-center">Avg Net</th>
-                        <th className="text-center">Wks</th>
+                        <th className="text-center">Pts/Rd</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -245,13 +286,15 @@ export default function PlayerLeaderboards() {
                         <tr key={p.name} className={i === 0 ? 'table-warning' : ''}>
                           <td>{i === 0 ? '🔥' : i + 1}</td>
                           <td className="fw-semibold">{p.name}</td>
-                          <td className="text-center fw-bold">{p.avgNet}</td>
-                          <td className="text-center text-muted small">{p.weeksPlayed}/{last3Weeks.length}</td>
+                          <td className="text-center fw-bold">{p.rating}</td>
+                          <td className="text-center text-muted small">{p.avgNet}</td>
+                          <td className="text-center text-muted small">{p.ptsPer}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
+                <div className="card-footer text-muted small">Rating = avg net + match pts per round, normalized 0–100</div>
               </div>
             </div>
           )}
