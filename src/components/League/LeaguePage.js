@@ -3,6 +3,7 @@ import { Link, Routes, Route, useLocation } from 'react-router-dom';
 import LeagueStandings from './LeagueStandings';
 import MatchResults from './MatchResults';
 import PlayerLeaderboards from './PlayerLeaderboards';
+import LeagueSchedule from './LeagueSchedule';
 
 export default function LeaguePage() {
   const location = useLocation();
@@ -11,6 +12,7 @@ export default function LeaguePage() {
     { path: '/league',             label: 'Standings',     icon: 'trophy' },
     { path: '/league/matches',     label: 'Match Results', icon: 'people-fill' },
     { path: '/league/leaderboards',label: 'Leaderboards',  icon: 'bar-chart-line' },
+    { path: '/league/schedule',    label: 'Schedule',      icon: 'calendar3' },
   ];
 
   return (
@@ -36,6 +38,7 @@ export default function LeaguePage() {
         <Route index element={<LeagueStandings />} />
         <Route path="matches" element={<MatchResults />} />
         <Route path="leaderboards" element={<PlayerLeaderboards />} />
+        <Route path="schedule" element={<LeagueSchedule />} />
       </Routes>
     </div>
   );
