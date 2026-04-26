@@ -258,7 +258,6 @@ export default function PlayerLeaderboards() {
                     </tbody>
                   </table>
                 </div>
-                  </div>
                 </div>
                 <div className="card-footer text-muted small">▼ = improved &nbsp;·&nbsp; ▲ = higher handicap</div>
               </div>
@@ -297,7 +296,6 @@ export default function PlayerLeaderboards() {
                     </tbody>
                   </table>
                 </div>
-                  </div>
                 </div>
                 <div className="card-footer text-muted small">Rating = avg net + total match pts, normalized 0–100</div>
               </div>
