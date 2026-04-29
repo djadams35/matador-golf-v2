@@ -84,29 +84,40 @@ export default function LeagueSchedule() {
 
       {/* Matchup card */}
       <div className="card border-0 shadow-sm">
-        <div className="card-header bg-matador-black text-white d-flex justify-content-between align-items-center">
+        <div className={`card-header text-white d-flex justify-content-between align-items-center ${isRainout && status?.reschedule_date ? 'bg-matador-red' : 'bg-matador-black'}`}>
           <span>
-            <i className="bi bi-calendar3 me-2"></i>Week {selectedWeek} Matchups
-            {weekDate && <span className="ms-2 fw-normal small opacity-75">{formatDate(weekDate)}</span>}
+            <i className={`bi ${isRainout && status?.reschedule_date ? 'bi-calendar-check' : 'bi-calendar3'} me-2`}></i>
+            {isRainout && status?.reschedule_date
+              ? <>Week {selectedWeek} Makeup <span className="fw-normal small ms-1 opacity-75">{formatDate(status.reschedule_date)}</span></>
+              : <>Week {selectedWeek} Matchups{weekDate && <span className="ms-2 fw-normal small opacity-75">{formatDate(weekDate)}</span>}</>
+            }
           </span>
-          {isRainout ? (
-            <span className="badge bg-warning text-dark">
-              <i className="bi bi-cloud-rain me-1"></i>Rained Out
-            </span>
-          ) : weekHasResults ? (
+          {isRainout && !status?.reschedule_date && !status?.no_reschedule && (
+            <span className="badge bg-warning text-dark"><i className="bi bi-cloud-rain me-1"></i>Rained Out — TBD</span>
+          )}
+          {isRainout && status?.no_reschedule && (
+            <span className="badge bg-secondary">Not Rescheduling</span>
+          )}
+          {isRainout && status?.reschedule_date && (
+            <span className="badge bg-light text-dark">Makeup Game</span>
+          )}
+          {!isRainout && weekHasResults && (
             <span className="badge bg-success">Results available</span>
-          ) : (
+          )}
+          {!isRainout && !weekHasResults && (
             <span className="badge bg-secondary">Upcoming</span>
           )}
         </div>
 
         {isRainout && (
-          <div className="alert alert-warning mb-0 rounded-0 py-2 px-3 small">
-            <i className="bi bi-cloud-rain-heavy me-2"></i>
-            <strong>Week {selectedWeek} was rained out.</strong>
-            {status.reschedule_date && <> Rescheduled for <strong>{formatDate(status.reschedule_date)}</strong>.</>}
-            {status.no_reschedule && <> This week will not be rescheduled.</>}
-            {!status.reschedule_date && !status.no_reschedule && <> Reschedule details TBD.</>}
+          <div className={`mb-0 rounded-0 py-2 px-3 small ${status?.reschedule_date ? 'alert alert-info' : 'alert alert-warning'}`}>
+            <i className="bi bi-cloud-rain me-2"></i>
+            {status?.reschedule_date
+              ? <>Originally scheduled for <strong>{formatDate(weekDate)}</strong> — rained out. Makeup date: <strong>{formatDate(status.reschedule_date)}</strong>.</>
+              : status?.no_reschedule
+                ? <>Week {selectedWeek} was rained out and will not be rescheduled.</>
+                : <>Week {selectedWeek} was rained out. Reschedule TBD.</>
+            }
           </div>
         )}
 

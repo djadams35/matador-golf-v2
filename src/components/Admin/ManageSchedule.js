@@ -166,11 +166,6 @@ export default function ManageSchedule() {
     }, { onConflict: 'week_number' });
     if (error) { setMessage({ type: 'error', text: error.message }); setSaving(false); return; }
 
-    // Update the schedule rows' date to the new reschedule date if one was set
-    if (rescheduleDate) {
-      await supabase.from('schedule').update({ date: rescheduleDate }).eq('week_number', weekNum);
-    }
-
     setMessage({ type: 'success', text: `Week ${weekNum} marked as rained out.` });
     fetchData();
     setEditingRainout(null);
