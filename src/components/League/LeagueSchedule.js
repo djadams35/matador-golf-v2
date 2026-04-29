@@ -113,7 +113,7 @@ export default function LeagueSchedule() {
           <div className={`mb-0 rounded-0 py-2 px-3 small ${status?.reschedule_date ? 'alert alert-info' : 'alert alert-warning'}`}>
             <i className="bi bi-cloud-rain me-2"></i>
             {status?.reschedule_date
-              ? <>Originally scheduled for <strong>{formatDate(weekDate)}</strong> — rained out. Makeup date: <strong>{formatDate(status.reschedule_date)}</strong>.</>
+              ? <>Originally scheduled for <strong>{formatDate(status.original_date || weekDate)}</strong> — rained out. Makeup date: <strong>{formatDate(status.reschedule_date)}</strong>.</>
               : status?.no_reschedule
                 ? <>Week {selectedWeek} was rained out and will not be rescheduled.</>
                 : <>Week {selectedWeek} was rained out. Reschedule TBD.</>

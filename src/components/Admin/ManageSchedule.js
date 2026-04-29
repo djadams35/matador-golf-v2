@@ -158,11 +158,17 @@ export default function ManageSchedule() {
   async function saveRainout(weekNum) {
     setSaving(true);
     const rescheduleDate = rainoutForm.no_reschedule ? null : (rainoutForm.reschedule_date || null);
+
+    // Capture the current schedule date as original_date the first time this week is marked as a rainout
+    const existing = rainoutStatuses[weekNum];
+    const originalDate = existing?.original_date || byWeek[weekNum]?.[0]?.date || null;
+
     const { error } = await supabase.from('schedule_week_status').upsert({
       week_number: weekNum,
       rained_out: true,
       reschedule_date: rescheduleDate,
       no_reschedule: rainoutForm.no_reschedule,
+      original_date: originalDate,
     }, { onConflict: 'week_number' });
     if (error) { setMessage({ type: 'error', text: error.message }); setSaving(false); return; }
 
