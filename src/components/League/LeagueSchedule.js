@@ -14,7 +14,7 @@ export default function LeagueSchedule() {
     const [schedRes, resultsRes, statusRes] = await Promise.all([
       supabase
         .from('schedule')
-        .select('id, week_number, team_a:teams!team_a_id(name), team_b:teams!team_b_id(name)')
+        .select('id, week_number, date, team_a:teams!team_a_id(name), team_b:teams!team_b_id(name)')
         .order('week_number'),
       supabase
         .from('match_results')
@@ -62,6 +62,7 @@ export default function LeagueSchedule() {
 
   const matchups = byWeek[selectedWeek] || [];
   const weekHasResults = matchups.length > 0 && matchups[0].hasResults;
+  const weekDate = matchups[0]?.date;
   const status = weekStatuses[selectedWeek];
   const isRainout = status?.rained_out;
 
@@ -84,7 +85,10 @@ export default function LeagueSchedule() {
       {/* Matchup card */}
       <div className="card border-0 shadow-sm">
         <div className="card-header bg-matador-black text-white d-flex justify-content-between align-items-center">
-          <span><i className="bi bi-calendar3 me-2"></i>Week {selectedWeek} Matchups</span>
+          <span>
+            <i className="bi bi-calendar3 me-2"></i>Week {selectedWeek} Matchups
+            {weekDate && <span className="ms-2 fw-normal small opacity-75">{formatDate(weekDate)}</span>}
+          </span>
           {isRainout ? (
             <span className="badge bg-warning text-dark">
               <i className="bi bi-cloud-rain me-1"></i>Rained Out

@@ -57,6 +57,7 @@ export default function ManageSchedule() {
       complete: async (result) => {
         const rows = result.data;
         let currentRound = null;
+        let currentDate = null;
         let imported = 0, errors = [];
 
         for (const row of rows) {
@@ -65,6 +66,10 @@ export default function ManageSchedule() {
           const roundVal = String(row[0]).trim();
           if (roundVal && !isNaN(parseInt(roundVal))) {
             currentRound = parseInt(roundVal);
+            // Parse date from col 1: "04/06/2026 - Regular" → "2026-04-06"
+            const datePart = String(row[1] || '').trim().split(' - ')[0].trim();
+            const [mm, dd, yyyy] = datePart.split('/');
+            currentDate = mm && dd && yyyy ? `${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}` : null;
           }
 
           if (!currentRound) continue;
@@ -85,6 +90,7 @@ export default function ManageSchedule() {
             week_number: currentRound,
             team_a_id: teamAId,
             team_b_id: teamBId,
+            date: currentDate,
           }, { onConflict: 'week_number,team_a_id' });
 
           if (error) { errors.push(`Week ${currentRound} ${team1Name} vs ${team2Name}: ${error.message}`); }
@@ -151,14 +157,22 @@ export default function ManageSchedule() {
 
   async function saveRainout(weekNum) {
     setSaving(true);
+    const rescheduleDate = rainoutForm.no_reschedule ? null : (rainoutForm.reschedule_date || null);
     const { error } = await supabase.from('schedule_week_status').upsert({
       week_number: weekNum,
       rained_out: true,
-      reschedule_date: rainoutForm.no_reschedule ? null : (rainoutForm.reschedule_date || null),
+      reschedule_date: rescheduleDate,
       no_reschedule: rainoutForm.no_reschedule,
     }, { onConflict: 'week_number' });
-    if (error) setMessage({ type: 'error', text: error.message });
-    else { setMessage({ type: 'success', text: `Week ${weekNum} marked as rained out.` }); fetchData(); }
+    if (error) { setMessage({ type: 'error', text: error.message }); setSaving(false); return; }
+
+    // Update the schedule rows' date to the new reschedule date if one was set
+    if (rescheduleDate) {
+      await supabase.from('schedule').update({ date: rescheduleDate }).eq('week_number', weekNum);
+    }
+
+    setMessage({ type: 'success', text: `Week ${weekNum} marked as rained out.` });
+    fetchData();
     setEditingRainout(null);
     setSaving(false);
   }
@@ -254,12 +268,13 @@ export default function ManageSchedule() {
             const status = rainoutStatuses[weekNum];
             const isRainout = status?.rained_out;
             const isEditing = editingRainout === weekNum;
+            const weekDate = matchups[0]?.date;
 
             return (
               <div key={week} className="card border-0 shadow-sm mb-3">
                 <div className="card-header bg-matador-black text-white d-flex justify-content-between align-items-center flex-wrap gap-2">
                   <span className="d-flex align-items-center gap-2 flex-wrap">
-                    <span>Week {week}</span>
+                    <span>Week {week}{weekDate && <span className="text-white-50 small ms-2">{formatDate(weekDate)}</span>}</span>
                     {isRainout && (
                       <span className="badge bg-warning text-dark">
                         <i className="bi bi-cloud-rain me-1"></i>Rained Out
