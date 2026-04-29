@@ -13,7 +13,7 @@ export default function LeagueSchedule() {
     const [schedRes, resultsRes] = await Promise.all([
       supabase
         .from('schedule')
-        .select('id, week_number, team_a:teams!team_a_id(name), team_b:teams!team_b_id(name)')
+        .select('id, week_number, note, team_a:teams!team_a_id(name), team_b:teams!team_b_id(name)')
         .order('week_number'),
       supabase
         .from('match_results')
@@ -48,6 +48,7 @@ export default function LeagueSchedule() {
 
   const matchups = byWeek[selectedWeek] || [];
   const weekHasResults = matchups.length > 0 && matchups[0].hasResults;
+  const weekNote = matchups.find(m => m.note)?.note ?? null;
 
   return (
     <div>
@@ -68,10 +69,13 @@ export default function LeagueSchedule() {
       <div className="card border-0 shadow-sm">
         <div className="card-header bg-matador-black text-white d-flex justify-content-between align-items-center">
           <span><i className="bi bi-calendar3 me-2"></i>Week {selectedWeek} Matchups</span>
-          {weekHasResults && (
+          {weekNote && (
+            <span className="badge bg-warning text-dark">{weekNote}</span>
+          )}
+          {!weekNote && weekHasResults && (
             <span className="badge bg-success">Results available</span>
           )}
-          {!weekHasResults && (
+          {!weekNote && !weekHasResults && (
             <span className="badge bg-secondary">Upcoming</span>
           )}
         </div>
