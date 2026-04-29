@@ -5,6 +5,9 @@ import { supabase } from '../../supabaseClient';
 export default function ManageSchedule() {
   const [schedule, setSchedule] = useState([]);
   const [teams, setTeams] = useState([]);
+  const [rainoutStatuses, setRainoutStatuses] = useState({});
+  const [editingRainout, setEditingRainout] = useState(null);
+  const [rainoutForm, setRainoutForm] = useState({ reschedule_date: '', no_reschedule: false });
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState(null);
   const [newEntry, setNewEntry] = useState({ week_number: '', team_a_id: '', team_b_id: '' });
@@ -15,14 +18,20 @@ export default function ManageSchedule() {
 
   async function fetchData() {
     setLoading(true);
-    const [schedRes, teamsRes] = await Promise.all([
+    const [schedRes, teamsRes, statusRes] = await Promise.all([
       supabase.from('schedule')
         .select('*, team_a:teams!team_a_id(name), team_b:teams!team_b_id(name)')
         .order('week_number'),
       supabase.from('teams').select('id, name').order('name'),
+      supabase.from('schedule_week_status').select('*'),
     ]);
     if (schedRes.data) setSchedule(schedRes.data);
     if (teamsRes.data) setTeams(teamsRes.data);
+    if (statusRes.data) {
+      const map = {};
+      statusRes.data.forEach(s => { map[s.week_number] = s; });
+      setRainoutStatuses(map);
+    }
     setLoading(false);
   }
 
@@ -32,7 +41,6 @@ export default function ManageSchedule() {
     setImporting(true);
     setMessage(null);
 
-    // Load current teams from DB to match names
     const { data: teamsData } = await supabase.from('teams').select('id, name');
     if (!teamsData || teamsData.length === 0) {
       setMessage({ type: 'error', text: 'No teams found. Import your teams first before importing the schedule.' });
@@ -40,23 +48,20 @@ export default function ManageSchedule() {
       return;
     }
 
-    // Build a lookup: team name → id (case-insensitive, trimmed)
     const teamLookup = {};
     teamsData.forEach(t => { teamLookup[t.name.toLowerCase().trim()] = t.id; });
 
     Papa.parse(file, {
       header: false,
-      skipEmptyLines: false, // keep blank rows so we can track round number across merged cells
+      skipEmptyLines: false,
       complete: async (result) => {
         const rows = result.data;
         let currentRound = null;
         let imported = 0, errors = [];
 
         for (const row of rows) {
-          // Skip header row
           if (String(row[0]).trim() === 'Round') continue;
 
-          // If column 0 has a number, this is the start of a new round
           const roundVal = String(row[0]).trim();
           if (roundVal && !isNaN(parseInt(roundVal))) {
             currentRound = parseInt(roundVal);
@@ -67,7 +72,6 @@ export default function ManageSchedule() {
           const team1Name = String(row[5] || '').trim();
           const team2Name = String(row[7] || '').trim();
 
-          // Skip rows without team matchups (holiday weeks, blank rows, header rows)
           if (!team1Name || !team2Name || team1Name === 'Team 1' || team2Name === 'Team 2') continue;
           if (team1Name.toUpperCase() === 'VS' || team2Name.toUpperCase() === 'VS') continue;
 
@@ -136,7 +140,45 @@ export default function ManageSchedule() {
     else { setMessage({ type: 'success', text: 'Removed.' }); fetchData(); }
   }
 
-  // Group schedule by week for display
+  function startEditRainout(weekNum) {
+    const existing = rainoutStatuses[weekNum];
+    setRainoutForm({
+      reschedule_date: existing?.reschedule_date || '',
+      no_reschedule: existing?.no_reschedule || false,
+    });
+    setEditingRainout(weekNum);
+  }
+
+  async function saveRainout(weekNum) {
+    setSaving(true);
+    const { error } = await supabase.from('schedule_week_status').upsert({
+      week_number: weekNum,
+      rained_out: true,
+      reschedule_date: rainoutForm.no_reschedule ? null : (rainoutForm.reschedule_date || null),
+      no_reschedule: rainoutForm.no_reschedule,
+    }, { onConflict: 'week_number' });
+    if (error) setMessage({ type: 'error', text: error.message });
+    else { setMessage({ type: 'success', text: `Week ${weekNum} marked as rained out.` }); fetchData(); }
+    setEditingRainout(null);
+    setSaving(false);
+  }
+
+  async function clearRainout(weekNum) {
+    if (!window.confirm(`Clear rainout status for Week ${weekNum}?`)) return;
+    setSaving(true);
+    const { error } = await supabase.from('schedule_week_status').delete().eq('week_number', weekNum);
+    if (error) setMessage({ type: 'error', text: error.message });
+    else { setMessage({ type: 'success', text: `Week ${weekNum} rainout cleared.` }); fetchData(); }
+    setEditingRainout(null);
+    setSaving(false);
+  }
+
+  function formatDate(dateStr) {
+    if (!dateStr) return '';
+    const [y, m, d] = dateStr.split('-');
+    return new Date(+y, +m - 1, +d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
   const byWeek = {};
   schedule.forEach(s => {
     if (!byWeek[s.week_number]) byWeek[s.week_number] = [];
@@ -197,7 +239,7 @@ export default function ManageSchedule() {
       </div>
 
       {message && (
-        <div className={`alert alert-${message.type === 'error' ? 'danger' : 'success'} py-2 mb-3`} style={{whiteSpace: 'pre-line'}}>
+        <div className={`alert alert-${message.type === 'error' ? 'danger' : 'success'} py-2 mb-3`} style={{ whiteSpace: 'pre-line' }}>
           {message.text}
         </div>
       )}
@@ -207,29 +249,110 @@ export default function ManageSchedule() {
       ) : (
         <div>
           {Object.keys(byWeek).length === 0 && <p className="text-muted">No schedule entries yet.</p>}
-          {Object.entries(byWeek).map(([week, matchups]) => (
-            <div key={week} className="card border-0 shadow-sm mb-3">
-              <div className="card-header bg-matador-black text-white">Week {week}</div>
-              <div className="card-body p-0">
-                <table className="table table-sm mb-0">
-                  <tbody>
-                    {matchups.map(s => (
-                      <tr key={s.id}>
-                        <td className="fw-semibold ps-3">{s.team_a?.name}</td>
-                        <td className="text-muted text-center">vs</td>
-                        <td className="fw-semibold">{s.team_b?.name}</td>
-                        <td className="text-end pe-3">
-                          <button className="btn btn-sm btn-outline-danger" onClick={() => deleteEntry(s.id)}>
-                            <i className="bi bi-trash"></i>
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+          {Object.entries(byWeek).map(([week, matchups]) => {
+            const weekNum = parseInt(week);
+            const status = rainoutStatuses[weekNum];
+            const isRainout = status?.rained_out;
+            const isEditing = editingRainout === weekNum;
+
+            return (
+              <div key={week} className="card border-0 shadow-sm mb-3">
+                <div className="card-header bg-matador-black text-white d-flex justify-content-between align-items-center flex-wrap gap-2">
+                  <span className="d-flex align-items-center gap-2 flex-wrap">
+                    <span>Week {week}</span>
+                    {isRainout && (
+                      <span className="badge bg-warning text-dark">
+                        <i className="bi bi-cloud-rain me-1"></i>Rained Out
+                        {status.reschedule_date && ` · Rescheduled ${formatDate(status.reschedule_date)}`}
+                        {status.no_reschedule && ' · Not Rescheduling'}
+                      </span>
+                    )}
+                  </span>
+                  <div className="d-flex gap-2">
+                    {isRainout ? (
+                      <>
+                        <button className="btn btn-sm btn-outline-light" onClick={() => startEditRainout(weekNum)}>
+                          <i className="bi bi-pencil me-1"></i>Edit
+                        </button>
+                        <button className="btn btn-sm btn-outline-warning" onClick={() => clearRainout(weekNum)} disabled={saving}>
+                          Clear Rainout
+                        </button>
+                      </>
+                    ) : (
+                      <button className="btn btn-sm btn-outline-light" onClick={() => startEditRainout(weekNum)}>
+                        <i className="bi bi-cloud-rain me-1"></i>Mark Rainout
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {isEditing && (
+                  <div className="card-body bg-light border-bottom">
+                    <p className="fw-semibold small mb-2">
+                      <i className="bi bi-cloud-rain-heavy text-warning me-1"></i>
+                      Rainout details for Week {weekNum}
+                    </p>
+                    <div className="d-flex flex-wrap align-items-end gap-3">
+                      <div>
+                        <label className="form-label small fw-semibold mb-1">Reschedule date</label>
+                        <input
+                          type="date"
+                          className="form-control form-control-sm"
+                          style={{ width: 160 }}
+                          value={rainoutForm.reschedule_date}
+                          disabled={rainoutForm.no_reschedule}
+                          onChange={e => setRainoutForm(f => ({ ...f, reschedule_date: e.target.value }))}
+                        />
+                      </div>
+                      <div className="form-check mb-1">
+                        <input
+                          className="form-check-input"
+                          type="checkbox"
+                          id={`no-reschedule-${week}`}
+                          checked={rainoutForm.no_reschedule}
+                          onChange={e => setRainoutForm(f => ({
+                            ...f,
+                            no_reschedule: e.target.checked,
+                            reschedule_date: e.target.checked ? '' : f.reschedule_date,
+                          }))}
+                        />
+                        <label className="form-check-label small" htmlFor={`no-reschedule-${week}`}>
+                          Not rescheduling
+                        </label>
+                      </div>
+                      <div className="d-flex gap-2">
+                        <button className="btn btn-sm btn-matador" onClick={() => saveRainout(weekNum)} disabled={saving}>
+                          Save
+                        </button>
+                        <button className="btn btn-sm btn-outline-secondary" onClick={() => setEditingRainout(null)}>
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="card-body p-0">
+                  <table className="table table-sm mb-0">
+                    <tbody>
+                      {matchups.map(s => (
+                        <tr key={s.id}>
+                          <td className="fw-semibold ps-3">{s.team_a?.name}</td>
+                          <td className="text-muted text-center">vs</td>
+                          <td className="fw-semibold">{s.team_b?.name}</td>
+                          <td className="text-end pe-3">
+                            <button className="btn btn-sm btn-outline-danger" onClick={() => deleteEntry(s.id)}>
+                              <i className="bi bi-trash"></i>
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
