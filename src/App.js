@@ -4,6 +4,8 @@ import Navbar from './components/Layout/Navbar';
 import LeaguePage from './components/League/LeaguePage';
 import DegensPage from './components/Degens/DegensPage';
 import AdminPage from './components/Admin/AdminPage';
+import Practice from './pages/Practice';
+import PracticeDrills from './pages/PracticeDrills';
 
 export default function App() {
   return (
@@ -18,6 +20,8 @@ export default function App() {
               <Route path="/league/*" element={<LeaguePage />} />
               <Route path="/degens/*" element={<DegensPage />} />
               <Route path="/admin/*" element={<AdminPage />} />
+              <Route path="/practice/drills" element={<PracticeDrills />} />
+              <Route path="/practice" element={<Practice />} />
             </Routes>
           </div>
         </main>

@@ -8,6 +8,7 @@ import ManageSchedule from './ManageSchedule';
 import ManageDegens from './ManageDegens';
 import RoundLog from './RoundLog';
 import ManageAdmins from './ManageAdmins';
+import ManagePractice from './ManagePractice';
 
 export default function AdminPage() {
   const [authenticated, setAuthenticated] = useState(
@@ -109,6 +110,7 @@ export default function AdminPage() {
     { path: '/admin/schedule',  label: 'Schedule',     icon: 'calendar3' },
     { path: '/admin/degens',    label: 'Degens',       icon: 'dice-5' },
     { path: '/admin/settings',  label: 'Settings',     icon: 'gear' },
+    { path: '/admin/practice', label: 'Practice',     icon: 'golf' },
   ];
 
   return (
@@ -146,6 +148,7 @@ export default function AdminPage() {
         <Route path="schedule" element={<ManageSchedule />} />
         <Route path="degens" element={<ManageDegens />} />
         <Route path="settings" element={<ManageAdmins currentUsername={currentUsername} />} />
+        <Route path="practice" element={<ManagePractice />} />
       </Routes>
     </div>
   );
