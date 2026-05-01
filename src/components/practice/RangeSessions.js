@@ -163,7 +163,7 @@ export default function RangeSessions() {
   function getSummaryStats(planNum) {
     const plan = getResolvedPlan(planNum);
     const planSessions = sessions.filter(s => s.month_plan === planNum);
-    return SECTIONS.map(sec => {
+    return SECTIONS.filter(sec => sec.key !== 'warmup').map(sec => {
       const drillId = plan[`${sec.key}DrillId`];
       const drill = getDrillById(drillId);
       if (!drill) return null;
@@ -317,7 +317,7 @@ export default function RangeSessions() {
                     <div className="text-muted small mb-3">{drill.objective}</div>
                   )}
 
-                  {drill && (
+                  {drill && sec.key !== 'warmup' && (
                     <ScoreInput
                       drill={drill}
                       score={score}
@@ -413,13 +413,14 @@ export default function RangeSessions() {
         <p className="text-muted small">No range sessions logged yet.</p>
       ) : (
         sessions.map(s => {
-          const passCount = SECTIONS.reduce((acc, sec) => {
+          const scorableSections = SECTIONS.filter(sec => sec.key !== 'warmup');
+          const passCount = scorableSections.reduce((acc, sec) => {
             const drill = getDrillById(s[`${sec.key}_drill`]);
             const score = s[`${sec.key}_score`];
             if (drill && score && isDrillPass(drill, score)) return acc + 1;
             return acc;
           }, 0);
-          const scoredCount = SECTIONS.filter(sec => {
+          const scoredCount = scorableSections.filter(sec => {
             const drill = getDrillById(s[`${sec.key}_drill`]);
             return drill && s[`${sec.key}_score`];
           }).length;
@@ -450,13 +451,14 @@ export default function RangeSessions() {
                   const drill = getDrillById(s[`${sec.key}_drill`]);
                   const score = s[`${sec.key}_score`];
                   if (!drill) return null;
-                  const pass = isDrillPass(drill, score);
+                  const isWarmup = sec.key === 'warmup';
+                  const pass = isWarmup ? null : isDrillPass(drill, score);
                   return (
                     <div key={sec.key} className="d-flex justify-content-between align-items-center mb-1">
                       <div>
                         <span className="text-muted small me-1">{sec.label}:</span>
                         <span className="small">{drill.name}</span>
-                        {score && <span className="text-muted small ms-2">{scoreSummary(drill, score)}</span>}
+                        {!isWarmup && score && <span className="text-muted small ms-2">{scoreSummary(drill, score)}</span>}
                       </div>
                       {pass !== null && (
                         <span className={`badge ${pass ? 'bg-success' : 'bg-danger'}`} style={{ fontSize: '0.7rem' }}>

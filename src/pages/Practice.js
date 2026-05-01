@@ -4,12 +4,14 @@ import PracticeOverview from '../components/practice/PracticeOverview';
 import WeeklyLog from '../components/practice/WeeklyLog';
 import RangeSessions from '../components/practice/RangeSessions';
 import ShortGameSessions from '../components/practice/ShortGameSessions';
+import WeeklyResults from '../components/practice/WeeklyResults';
 
 const TABS = [
   { id: 'overview', label: 'Overview', icon: 'house' },
   { id: 'weekly', label: 'Weekly', icon: 'calendar3-week' },
   { id: 'range', label: 'Range', icon: 'dribbble' },
   { id: 'short-game', label: 'Short Game', icon: 'flag' },
+  { id: 'results', label: 'Results', icon: 'graph-up' },
 ];
 
 export default function Practice() {
@@ -44,6 +46,7 @@ export default function Practice() {
       {activeTab === 'weekly' && <WeeklyLog />}
       {activeTab === 'range' && <RangeSessions />}
       {activeTab === 'short-game' && <ShortGameSessions />}
+      {activeTab === 'results' && <WeeklyResults />}
     </div>
   );
 }
