@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../supabaseClient';
 import ScoreInput from './ScoreInput';
 import {
@@ -23,6 +23,13 @@ function drillsForType(type) {
   return [];
 }
 
+function pickRandomDrill(type, excludeId = null) {
+  const available = drillsForType(type);
+  if (available.length === 0) return '';
+  const pool = available.length > 1 ? available.filter(d => d.id !== excludeId) : available;
+  return pool[Math.floor(Math.random() * pool.length)].id;
+}
+
 function formatDisplayDate(dateStr) {
   if (!dateStr) return '';
   const [y, m, d] = dateStr.split('-');
@@ -45,6 +52,7 @@ export default function ShortGameSessions() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(null);
+  const [manualPick, setManualPick] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
 
@@ -61,14 +69,24 @@ export default function ShortGameSessions() {
     setLoading(false);
   }
 
+  const shuffle = useCallback((type, currentId = null) => {
+    const drillId = pickRandomDrill(type, currentId);
+    setForm(f => ({ ...f, drill: drillId, score: null }));
+  }, []);
+
   function openForm() {
-    setForm(emptyForm());
+    const type = 'chipping';
+    const drillId = pickRandomDrill(type);
+    setForm({ ...emptyForm(), drill: drillId });
+    setManualPick(false);
     setMessage(null);
     setShowForm(true);
   }
 
   function handleTypeChange(type) {
-    setForm(f => ({ ...f, session_type: type, drill: '', score: null }));
+    const drillId = pickRandomDrill(type);
+    setForm(f => ({ ...f, session_type: type, drill: drillId, score: null }));
+    setManualPick(false);
   }
 
   function handleDrillChange(drillId) {
@@ -152,17 +170,44 @@ export default function ShortGameSessions() {
 
             {/* Drill selector */}
             <div className="mb-4">
-              <label className="form-label fw-semibold">Drill</label>
-              <select
-                className="form-select form-select-lg"
-                value={form.drill}
-                onChange={e => handleDrillChange(e.target.value)}
-              >
-                <option value="">Select drill…</option>
-                {availableDrills.map(d => (
-                  <option key={d.id} value={d.id}>{d.name}</option>
-                ))}
-              </select>
+              <div className="d-flex justify-content-between align-items-center mb-2">
+                <label className="form-label fw-semibold mb-0">Drill</label>
+                <button
+                  type="button"
+                  className="btn btn-link btn-sm p-0 text-muted"
+                  onClick={() => setManualPick(m => !m)}
+                >
+                  {manualPick ? 'random' : 'pick manually'}
+                </button>
+              </div>
+
+              {!manualPick ? (
+                <div className="d-flex gap-2 align-items-center">
+                  <div className="flex-grow-1 border rounded px-3 py-2 bg-light fw-semibold" style={{ minHeight: 48, display: 'flex', alignItems: 'center' }}>
+                    {selectedDrill?.name || '—'}
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary"
+                    style={{ minHeight: 48, minWidth: 48 }}
+                    title="Shuffle drill"
+                    onClick={() => shuffle(form.session_type, form.drill)}
+                  >
+                    <i className="bi bi-shuffle"></i>
+                  </button>
+                </div>
+              ) : (
+                <select
+                  className="form-select form-select-lg"
+                  value={form.drill}
+                  onChange={e => handleDrillChange(e.target.value)}
+                >
+                  <option value="">Select drill…</option>
+                  {availableDrills.map(d => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </select>
+              )}
             </div>
 
             {selectedDrill && (
