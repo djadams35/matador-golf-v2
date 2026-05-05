@@ -9,6 +9,11 @@ import {
 
 const DAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
+const ROUND_TYPES = [
+  { id: 'round_9', label: '9 holes', badge: '9' },
+  { id: 'round_18', label: '18 holes', badge: '18' },
+];
+
 function formatWeekLabel(weekStart) {
   const end = addDays(weekStart, 6);
   const opts = { month: 'short', day: 'numeric' };
@@ -86,7 +91,11 @@ export default function WeeklyLog() {
     return monthCheckins.filter(c => c.category === catId).length;
   }
 
-  const totalWeekSessions = checkins.length;
+  const roundIds = new Set(ROUND_TYPES.map(r => r.id));
+  const totalWeekSessions = checkins.filter(c => !roundIds.has(c.category)).length;
+  const weekRounds9 = checkins.filter(c => c.category === 'round_9').length;
+  const weekRounds18 = checkins.filter(c => c.category === 'round_18').length;
+  const totalWeekRounds = weekRounds9 + weekRounds18;
   const goalsMetCount = categories.filter(cat => weekCountForCat(cat.id) >= cat.goal).length;
   const exceededCount = categories.filter(cat => weekCountForCat(cat.id) > cat.goal).length;
 
@@ -131,6 +140,10 @@ export default function WeeklyLog() {
         <div className="card border-0 bg-light flex-fill text-center p-2">
           <div className="fw-bold fs-5 text-primary">{exceededCount}</div>
           <div className="text-muted" style={{ fontSize: '0.75rem' }}>Exceeded</div>
+        </div>
+        <div className="card border-0 bg-light flex-fill text-center p-2">
+          <div className="fw-bold fs-5 text-success">{totalWeekRounds}</div>
+          <div className="text-muted" style={{ fontSize: '0.75rem' }}>Rounds</div>
         </div>
       </div>
 
@@ -212,6 +225,88 @@ export default function WeeklyLog() {
             </div>
           </div>
 
+          {/* Rounds grid */}
+          <div className="card border-0 shadow-sm mb-4">
+            <div className="card-header bg-matador-black text-white small d-flex justify-content-between align-items-center">
+              <span><i className="bi bi-golf me-2"></i>Rounds Played</span>
+              {totalWeekRounds > 0 && (
+                <span className="badge bg-matador-red">
+                  {totalWeekRounds} round{totalWeekRounds !== 1 ? 's' : ''}
+                  {weekRounds9 > 0 && weekRounds18 > 0 && ` (${weekRounds9}×9, ${weekRounds18}×18)`}
+                  {weekRounds9 > 0 && weekRounds18 === 0 && ` (9-hole)`}
+                  {weekRounds18 > 0 && weekRounds9 === 0 && ` (18-hole)`}
+                </span>
+              )}
+            </div>
+            <div className="card-body p-0">
+              <div className="table-responsive">
+                <table className="table table-bordered mb-0" style={{ tableLayout: 'fixed' }}>
+                  <thead>
+                    <tr className="table-dark">
+                      <th style={{ width: '30%', fontSize: '0.8rem' }}>Type</th>
+                      {DAY_LABELS.map((label, i) => {
+                        const isToday = weekDays[i] === todayISO;
+                        return (
+                          <th
+                            key={i}
+                            className={`text-center ${isToday ? 'text-matador-red' : ''}`}
+                            style={{ fontSize: '0.8rem', padding: '6px 2px' }}
+                          >
+                            {label}
+                          </th>
+                        );
+                      })}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ROUND_TYPES.map(rt => (
+                      <tr key={rt.id}>
+                        <td style={{ fontSize: '0.78rem', verticalAlign: 'middle', padding: '6px 8px' }}>
+                          <div className="fw-semibold">{rt.label}</div>
+                          <div className="text-muted" style={{ fontSize: '0.7rem' }}>
+                            {weekCountForCat(rt.id)} this week
+                          </div>
+                        </td>
+                        {weekDays.map((dateISO, di) => {
+                          const key = `${dateISO}|${rt.id}`;
+                          const checked = checkinSet.has(key);
+                          const isTogglingThis = toggling === key;
+                          const future = dateISO > todayISO && !isFuture;
+                          return (
+                            <td
+                              key={di}
+                              className="text-center p-0"
+                              style={{ verticalAlign: 'middle', cursor: future ? 'default' : 'pointer' }}
+                              onClick={() => !future && !isTogglingThis && toggleCheckin(dateISO, rt.id)}
+                            >
+                              <div style={{ minHeight: 36, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                {isTogglingThis ? (
+                                  <span className="spinner-border spinner-border-sm text-secondary" style={{ width: 16, height: 16 }}></span>
+                                ) : checked ? (
+                                  <span
+                                    className="badge bg-success fw-bold"
+                                    style={{ fontSize: '0.7rem', minWidth: 22 }}
+                                  >
+                                    {rt.badge}
+                                  </span>
+                                ) : (
+                                  <i
+                                    className={`bi bi-circle ${future ? 'text-muted opacity-25' : 'text-muted'}`}
+                                    style={{ fontSize: '1.15rem' }}
+                                  ></i>
+                                )}
+                              </div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
           {/* Month progress */}
           <div className="card border-0 shadow-sm">
             <div className="card-header bg-matador-black text-white small">
@@ -242,6 +337,26 @@ export default function WeeklyLog() {
                   </div>
                 );
               })}
+
+              {/* Rounds this month */}
+              {(() => {
+                const nineCount = monthCountForCat('round_9');
+                const eighteenCount = monthCountForCat('round_18');
+                const totalRounds = nineCount + eighteenCount;
+                if (totalRounds === 0) return null;
+                return (
+                  <div className="pt-3 mt-1 border-top">
+                    <div className="d-flex justify-content-between small mb-1">
+                      <span className="fw-semibold"><i className="bi bi-golf me-1 text-success"></i>Rounds played</span>
+                      <span className="text-success fw-bold">{totalRounds}</span>
+                    </div>
+                    <div className="d-flex gap-3 small text-muted">
+                      {nineCount > 0 && <span>{nineCount} × 9-hole</span>}
+                      {eighteenCount > 0 && <span>{eighteenCount} × 18-hole</span>}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </>
