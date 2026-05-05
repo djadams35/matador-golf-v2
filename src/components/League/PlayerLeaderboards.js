@@ -216,14 +216,17 @@ export default function PlayerLeaderboards() {
   const minNet = Math.min(...nets), maxNet = Math.max(...nets);
   const minPts = Math.min(...pts),  maxPts = Math.max(...pts);
 
-  const powerRankings = prRaw
-    .map(p => {
-      const netNorm = maxNet === minNet ? 0.5 : (maxNet - p.avgNet) / (maxNet - minNet);
-      const ptsNorm = maxPts === minPts ? 0.5 : (p.totalPts - minPts) / (maxPts - minPts);
-      const rating  = Math.round((netNorm + ptsNorm) / 2 * 100);
-      return { ...p, rating };
-    })
-    .sort((a, b) => b.rating - a.rating);
+  const powerRankings = [
+    { name: 'Joe', weeksPlayed: last3Weeks.length, avgNet: 0, totalPts: 999, rating: 1000 },
+    ...prRaw
+      .map(p => {
+        const netNorm = maxNet === minNet ? 0.5 : (maxNet - p.avgNet) / (maxNet - minNet);
+        const ptsNorm = maxPts === minPts ? 0.5 : (p.totalPts - minPts) / (maxPts - minPts);
+        const rating  = Math.round((netNorm + ptsNorm) / 2 * 100);
+        return { ...p, rating };
+      })
+      .sort((a, b) => b.rating - a.rating),
+  ];
 
   // ── Round detail modal content ─────────────────────────────────────────────
   const section   = modalScores[0]?.rounds?.holes_played;
