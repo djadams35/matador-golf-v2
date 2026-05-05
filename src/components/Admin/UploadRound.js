@@ -14,6 +14,8 @@ export default function UploadRound() {
   const [permanentRoster, setPermanentRoster] = useState([]); // { id, name, teamId }
   const [subAssignments, setSubAssignments] = useState({}); // playerName -> originalPlayerId
   const [unassignedPlayers, setUnassignedPlayers] = useState([]);
+  const [tiedMatchups, setTiedMatchups] = useState([]); // matchups where a team has equal HCs
+  const [matchupPairings, setMatchupPairings] = useState({}); // scheduleId -> { aLow, aHigh, bLow, bHigh }
 
   useEffect(() => {
     supabase
@@ -31,6 +33,78 @@ export default function UploadRound() {
         }
       });
   }, []);
+
+  useEffect(() => {
+    if (!parsed || !weekOverride) {
+      setTiedMatchups([]);
+      setMatchupPairings({});
+      return;
+    }
+    fetchTiedMatchups(parsed.players, parseInt(weekOverride));
+  }, [parsed, weekOverride]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function fetchTiedMatchups(players, weekNumber) {
+    const sortByHCThenName = (arr) => [...arr].sort((a, b) => {
+      const d = a.fullHandicap - b.fullHandicap;
+      if (d !== 0) return d;
+      return a.name.split(' ').slice(-1)[0].localeCompare(b.name.split(' ').slice(-1)[0]);
+    });
+
+    const { data: matchups } = await supabase
+      .from('schedule')
+      .select('id, team_a:teams!team_a_id(id, name), team_b:teams!team_b_id(id, name)')
+      .eq('week_number', weekNumber);
+    if (!matchups?.length) return;
+
+    const teamIds = matchups.flatMap(m => [m.team_a.id, m.team_b.id]);
+    const { data: rosters } = await supabase
+      .from('team_players')
+      .select('team_id, player_id, players(name)')
+      .in('team_id', teamIds)
+      .eq('is_sub', false);
+
+    const playerByName = {};
+    players.forEach(p => { playerByName[p.name] = p; });
+
+    const ties = [];
+    const initialPairings = {};
+
+    for (const matchup of matchups) {
+      const getPlayers = (teamId) =>
+        (rosters || [])
+          .filter(r => r.team_id === teamId)
+          .map(r => playerByName[r.players?.name])
+          .filter(Boolean);
+
+      const aPlayers = getPlayers(matchup.team_a.id);
+      const bPlayers = getPlayers(matchup.team_b.id);
+      if (aPlayers.length < 2 || bPlayers.length < 2) continue;
+
+      const aSorted = sortByHCThenName(aPlayers);
+      const bSorted = sortByHCThenName(bPlayers);
+      const aTied = aSorted[0].fullHandicap === aSorted[1].fullHandicap;
+      const bTied = bSorted[0].fullHandicap === bSorted[1].fullHandicap;
+
+      if (aTied || bTied) {
+        ties.push({
+          scheduleId: matchup.id,
+          teamAName: matchup.team_a.name,
+          teamBName: matchup.team_b.name,
+          aTied, bTied,
+          aPlayers, bPlayers,
+          aSorted: aSorted.map(p => p.name),
+          bSorted: bSorted.map(p => p.name),
+        });
+        initialPairings[matchup.id] = {
+          aLow: aSorted[0].name, aHigh: aSorted[1].name,
+          bLow: bSorted[0].name, bHigh: bSorted[1].name,
+        };
+      }
+    }
+
+    setTiedMatchups(ties);
+    setMatchupPairings(initialPairings);
+  }
 
   const handleFile = useCallback(async (file) => {
     if (!file || !file.name.endsWith('.csv')) {
@@ -221,7 +295,7 @@ export default function UploadRound() {
 
       // ── 8. Calculate match play if week is known ───────────────────────────
       if (weekOverride) {
-        await calculateAndSaveMatchPlay(round.id, parseInt(weekOverride), players, section, playerMap);
+        await calculateAndSaveMatchPlay(round.id, parseInt(weekOverride), players, section, playerMap, matchupPairings);
       }
 
       // ── 9. Remove temp sub team_player records (keep roster clean) ─────────
@@ -246,7 +320,7 @@ export default function UploadRound() {
     }
   }
 
-  async function calculateAndSaveMatchPlay(roundId, weekNumber, players, section, playerMap) {
+  async function calculateAndSaveMatchPlay(roundId, weekNumber, players, section, playerMap, pairings = {}) {
     const { data: matchups } = await supabase
       .from('schedule')
       .select('*, team_a:teams!team_a_id(*), team_b:teams!team_b_id(*)')
@@ -277,7 +351,7 @@ export default function UploadRound() {
 
       if (teamA.players.length < 2 || teamB.players.length < 2) continue;
 
-      const result = calculateMatchPlay(teamA, teamB, section);
+      const result = calculateMatchPlay(teamA, teamB, section, pairings[matchup.id] || null);
 
       await supabase.from('match_results').insert({
         round_id: roundId,
@@ -366,6 +440,84 @@ export default function UploadRound() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Manual matchup pairing for tied-HC teams */}
+      {tiedMatchups.length > 0 && parsed && (
+        <div className="card border-0 shadow-sm mb-4">
+          <div className="card-header bg-warning text-dark">
+            <strong><i className="bi bi-shuffle me-2"></i>Tied Handicaps — Who plays the Low HC match?</strong>
+          </div>
+          <div className="card-body">
+            <p className="text-muted small mb-3">
+              Some teammates share the same handicap. Choose who plays the Low HC individual match for each pairing below.
+            </p>
+            {tiedMatchups.map(tm => {
+              const pairing = matchupPairings[tm.scheduleId] || {};
+              return (
+                <div key={tm.scheduleId} className="mb-4">
+                  <div className="fw-semibold mb-2">{tm.teamAName} vs {tm.teamBName}</div>
+                  {tm.aTied && (
+                    <div className="row g-2 align-items-center mb-2">
+                      <div className="col-12 col-md-5 text-muted small">
+                        {tm.teamAName} — Low HC match player:
+                      </div>
+                      <div className="col-12 col-md-5">
+                        <select
+                          className="form-select form-select-sm"
+                          value={pairing.aLow || ''}
+                          onChange={e => {
+                            const chosen = e.target.value;
+                            const other = tm.aPlayers.find(p => p.name !== chosen)?.name;
+                            setMatchupPairings(prev => ({
+                              ...prev,
+                              [tm.scheduleId]: { ...prev[tm.scheduleId], aLow: chosen, aHigh: other },
+                            }));
+                          }}
+                        >
+                          {tm.aPlayers.map(p => (
+                            <option key={p.name} value={p.name}>{p.name} (HC {p.fullHandicap})</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-12 col-md-2 text-muted small">
+                        High: {tm.aPlayers.find(p => p.name !== pairing.aLow)?.name || tm.aSorted[1]}
+                      </div>
+                    </div>
+                  )}
+                  {tm.bTied && (
+                    <div className="row g-2 align-items-center mb-2">
+                      <div className="col-12 col-md-5 text-muted small">
+                        {tm.teamBName} — Low HC match player:
+                      </div>
+                      <div className="col-12 col-md-5">
+                        <select
+                          className="form-select form-select-sm"
+                          value={pairing.bLow || ''}
+                          onChange={e => {
+                            const chosen = e.target.value;
+                            const other = tm.bPlayers.find(p => p.name !== chosen)?.name;
+                            setMatchupPairings(prev => ({
+                              ...prev,
+                              [tm.scheduleId]: { ...prev[tm.scheduleId], bLow: chosen, bHigh: other },
+                            }));
+                          }}
+                        >
+                          {tm.bPlayers.map(p => (
+                            <option key={p.name} value={p.name}>{p.name} (HC {p.fullHandicap})</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-12 col-md-2 text-muted small">
+                        High: {tm.bPlayers.find(p => p.name !== pairing.bLow)?.name || tm.bSorted[1]}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
