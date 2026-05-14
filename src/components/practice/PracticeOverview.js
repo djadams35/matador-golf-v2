@@ -15,6 +15,8 @@ function formatDisplayDate(dateStr) {
   return new Date(+y, +m - 1, +d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+const CARDIO_GOAL = 2;
+
 export default function PracticeOverview() {
   const [categories, setCategories] = useState(defaultHabitCategories);
   const [weekCheckins, setWeekCheckins] = useState([]);
@@ -65,7 +67,9 @@ export default function PracticeOverview() {
     return weekCheckins.filter(c => c.category === catId).length;
   }
 
-  const goalsMetCount = categories.filter(cat => weekCount(cat.id) >= cat.goal).length;
+  const weekCardio = weekCheckins.filter(c => c.category === 'cardio_hiit' || c.category === 'cardio_run').length;
+  const cardioMet = weekCardio >= CARDIO_GOAL;
+  const goalsMetCount = categories.filter(cat => weekCount(cat.id) >= cat.goal).length + (cardioMet ? 1 : 0);
 
   function rangePassCount(session) {
     const sections = ['warmup', 'wedge', 'iron', 'driver'];
@@ -93,7 +97,7 @@ export default function PracticeOverview() {
       <div className="card border-0 shadow-sm mb-4">
         <div className="card-header bg-matador-black text-white d-flex justify-content-between align-items-center">
           <span><i className="bi bi-check2-circle me-2"></i>This Week</span>
-          <span className="badge bg-matador-red">{goalsMetCount}/{categories.length} goals met</span>
+          <span className="badge bg-matador-red">{goalsMetCount}/{categories.length + 1} goals met</span>
         </div>
         <div className="card-body">
           {categories.map(cat => {
@@ -118,6 +122,20 @@ export default function PracticeOverview() {
               </div>
             );
           })}
+          <div className="mb-3">
+            <div className="d-flex justify-content-between small mb-1">
+              <span className="fw-semibold"><i className="bi bi-heart-pulse me-1 text-danger"></i>Cardio</span>
+              <span className={weekCardio > CARDIO_GOAL ? 'text-primary fw-bold' : cardioMet ? 'text-success fw-bold' : 'text-muted'}>
+                {weekCardio}/{CARDIO_GOAL}
+              </span>
+            </div>
+            <div className="progress" style={{ height: 8 }}>
+              <div
+                className={`progress-bar ${weekCardio > CARDIO_GOAL ? 'bg-primary' : cardioMet ? 'bg-success' : 'bg-secondary'}`}
+                style={{ width: `${Math.min(100, Math.round(weekCardio / CARDIO_GOAL * 100))}%` }}
+              ></div>
+            </div>
+          </div>
         </div>
       </div>
 

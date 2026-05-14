@@ -14,6 +14,13 @@ const ROUND_TYPES = [
   { id: 'round_18', label: '18 holes', badge: '18' },
 ];
 
+const CARDIO_TYPES = [
+  { id: 'cardio_hiit', label: 'HIIT', badge: 'HIIT' },
+  { id: 'cardio_run',  label: 'Run / Bike', badge: 'Run' },
+];
+
+const CARDIO_GOAL = 2;
+
 function formatWeekLabel(weekStart) {
   const end = addDays(weekStart, 6);
   const opts = { month: 'short', day: 'numeric' };
@@ -92,10 +99,15 @@ export default function WeeklyLog() {
   }
 
   const roundIds = new Set(ROUND_TYPES.map(r => r.id));
-  const totalWeekSessions = checkins.filter(c => !roundIds.has(c.category)).length;
+  const cardioIds = new Set(CARDIO_TYPES.map(c => c.id));
+  const excludedIds = new Set([...roundIds, ...cardioIds]);
+  const totalWeekSessions = checkins.filter(c => !excludedIds.has(c.category)).length;
   const weekRounds9 = checkins.filter(c => c.category === 'round_9').length;
   const weekRounds18 = checkins.filter(c => c.category === 'round_18').length;
   const totalWeekRounds = weekRounds9 + weekRounds18;
+  const weekCardioHIIT = checkins.filter(c => c.category === 'cardio_hiit').length;
+  const weekCardioRun  = checkins.filter(c => c.category === 'cardio_run').length;
+  const totalWeekCardio = weekCardioHIIT + weekCardioRun;
   const goalsMetCount = categories.filter(cat => weekCountForCat(cat.id) >= cat.goal).length;
   const exceededCount = categories.filter(cat => weekCountForCat(cat.id) > cat.goal).length;
 
@@ -144,6 +156,12 @@ export default function WeeklyLog() {
         <div className="card border-0 bg-light flex-fill text-center p-2">
           <div className="fw-bold fs-5 text-success">{totalWeekRounds}</div>
           <div className="text-muted" style={{ fontSize: '0.75rem' }}>Rounds</div>
+        </div>
+        <div className="card border-0 bg-light flex-fill text-center p-2">
+          <div className={`fw-bold fs-5 ${totalWeekCardio >= CARDIO_GOAL ? 'text-success' : ''}`}>
+            {totalWeekCardio}/{CARDIO_GOAL}
+          </div>
+          <div className="text-muted" style={{ fontSize: '0.75rem' }}>Cardio</div>
         </div>
       </div>
 
@@ -307,6 +325,88 @@ export default function WeeklyLog() {
             </div>
           </div>
 
+          {/* Cardio grid */}
+          <div className="card border-0 shadow-sm mb-4">
+            <div className="card-header bg-matador-black text-white small d-flex justify-content-between align-items-center">
+              <span><i className="bi bi-heart-pulse me-2"></i>Cardio</span>
+              {totalWeekCardio > 0 && (
+                <span className={`badge ${totalWeekCardio >= CARDIO_GOAL ? 'bg-success' : 'bg-secondary'}`}>
+                  {totalWeekCardio}/{CARDIO_GOAL} goal
+                  {weekCardioHIIT > 0 && weekCardioRun > 0 && ` (${weekCardioHIIT} HIIT, ${weekCardioRun} Run)`}
+                  {weekCardioHIIT > 0 && weekCardioRun === 0 && ` — HIIT`}
+                  {weekCardioRun > 0 && weekCardioHIIT === 0 && ` — Run/Bike`}
+                </span>
+              )}
+            </div>
+            <div className="card-body p-0">
+              <div className="table-responsive">
+                <table className="table table-bordered mb-0" style={{ tableLayout: 'fixed' }}>
+                  <thead>
+                    <tr className="table-dark">
+                      <th style={{ width: '30%', fontSize: '0.8rem' }}>Type</th>
+                      {DAY_LABELS.map((label, i) => {
+                        const isToday = weekDays[i] === todayISO;
+                        return (
+                          <th
+                            key={i}
+                            className={`text-center ${isToday ? 'text-matador-red' : ''}`}
+                            style={{ fontSize: '0.8rem', padding: '6px 2px' }}
+                          >
+                            {label}
+                          </th>
+                        );
+                      })}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {CARDIO_TYPES.map(ct => (
+                      <tr key={ct.id}>
+                        <td style={{ fontSize: '0.78rem', verticalAlign: 'middle', padding: '6px 8px' }}>
+                          <div className="fw-semibold">{ct.label}</div>
+                          <div className="text-muted" style={{ fontSize: '0.7rem' }}>
+                            {weekCountForCat(ct.id)} this week
+                          </div>
+                        </td>
+                        {weekDays.map((dateISO, di) => {
+                          const key = `${dateISO}|${ct.id}`;
+                          const checked = checkinSet.has(key);
+                          const isTogglingThis = toggling === key;
+                          const future = dateISO > todayISO && !isFuture;
+                          return (
+                            <td
+                              key={di}
+                              className="text-center p-0"
+                              style={{ verticalAlign: 'middle', cursor: future ? 'default' : 'pointer' }}
+                              onClick={() => !future && !isTogglingThis && toggleCheckin(dateISO, ct.id)}
+                            >
+                              <div style={{ minHeight: 36, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                {isTogglingThis ? (
+                                  <span className="spinner-border spinner-border-sm text-secondary" style={{ width: 16, height: 16 }}></span>
+                                ) : checked ? (
+                                  <span
+                                    className="badge bg-success fw-bold"
+                                    style={{ fontSize: '0.7rem', minWidth: 22 }}
+                                  >
+                                    {ct.badge}
+                                  </span>
+                                ) : (
+                                  <i
+                                    className={`bi bi-circle ${future ? 'text-muted opacity-25' : 'text-muted'}`}
+                                    style={{ fontSize: '1.15rem' }}
+                                  ></i>
+                                )}
+                              </div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
           {/* Month progress */}
           <div className="card border-0 shadow-sm">
             <div className="card-header bg-matador-black text-white small">
@@ -337,6 +437,36 @@ export default function WeeklyLog() {
                   </div>
                 );
               })}
+
+              {/* Cardio this month */}
+              {(() => {
+                const hiitCount = monthCountForCat('cardio_hiit');
+                const runCount  = monthCountForCat('cardio_run');
+                const totalCardio = hiitCount + runCount;
+                const cardioTarget = CARDIO_GOAL * 4;
+                const cardioPct = Math.min(100, Math.round(totalCardio / cardioTarget * 100));
+                const cardioMet = totalCardio >= cardioTarget;
+                return (
+                  <div className="mb-3">
+                    <div className="d-flex justify-content-between small mb-1">
+                      <span className="fw-semibold"><i className="bi bi-heart-pulse me-1 text-danger"></i>Cardio</span>
+                      <span className={cardioMet ? 'text-success fw-bold' : 'text-muted'}>{totalCardio}/{cardioTarget}</span>
+                    </div>
+                    <div className="progress" style={{ height: 6 }}>
+                      <div
+                        className={`progress-bar ${cardioMet ? 'bg-success' : 'bg-secondary'}`}
+                        style={{ width: `${cardioPct}%` }}
+                      ></div>
+                    </div>
+                    {totalCardio > 0 && (
+                      <div className="d-flex gap-3 small text-muted mt-1">
+                        {hiitCount > 0 && <span>{hiitCount} HIIT</span>}
+                        {runCount > 0 && <span>{runCount} Run/Bike</span>}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Rounds this month */}
               {(() => {
