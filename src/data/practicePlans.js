@@ -419,8 +419,7 @@ export const monthPlans = {
 
 export const defaultHabitCategories = [
   { id: 'strength', name: 'Strength training', goal: 3 },
-  { id: 'flexibility', name: 'Flexibility', goal: 1 },
-  { id: 'mobility', name: 'Mobility', goal: 1 },
+  { id: 'flexibility', name: 'Flexibility & Mobility', goal: 2 },
   { id: 'range', name: 'Driving range', goal: 1 },
   { id: 'short_game', name: 'Short game', goal: 1 },
 ];
