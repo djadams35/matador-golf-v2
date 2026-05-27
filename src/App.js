@@ -6,6 +6,7 @@ import DegensPage from './components/Degens/DegensPage';
 import AdminPage from './components/Admin/AdminPage';
 import Practice from './pages/Practice';
 import PracticeDrills from './pages/PracticeDrills';
+import ErrorBoundary from './components/ErrorBoundary';
 
 export default function App() {
   return (
@@ -14,6 +15,7 @@ export default function App() {
         <Navbar />
         <main className="flex-grow-1 py-4">
           <div className="container">
+            <ErrorBoundary>
             <Routes>
               {/* Default redirect to league */}
               <Route path="/" element={<Navigate to="/league" replace />} />
@@ -23,6 +25,7 @@ export default function App() {
               <Route path="/practice/drills" element={<PracticeDrills />} />
               <Route path="/practice" element={<Practice />} />
             </Routes>
+            </ErrorBoundary>
           </div>
         </main>
         <footer className="bg-matador-black text-white text-center py-2 small">

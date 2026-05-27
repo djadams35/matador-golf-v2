@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
+import { friendlyAdminError } from '../../utils/errorUtils';
 import {
   monthPlans,
   defaultHabitCategories,
@@ -74,7 +75,7 @@ export default function ManagePractice() {
       { setting_key: 'habit_categories', setting_value: categories, updated_at: new Date().toISOString() },
       { onConflict: 'setting_key' }
     );
-    if (error) setMessage({ type: 'error', text: error.message });
+    if (error) setMessage({ type: 'error', text: friendlyAdminError(error) });
     else setMessage({ type: 'success', text: 'Habit categories saved.' });
     setSaving(false);
   }
@@ -117,7 +118,7 @@ export default function ManagePractice() {
       },
       { onConflict: 'plan_number' }
     );
-    if (error) setMessage({ type: 'error', text: error.message });
+    if (error) setMessage({ type: 'error', text: friendlyAdminError(error) });
     else setMessage({ type: 'success', text: `Month ${planNum} plan saved.` });
     setSaving(false);
   }

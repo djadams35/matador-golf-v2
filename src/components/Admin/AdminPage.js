@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
+import { friendlyError } from '../../utils/errorUtils';
 import UploadRound from './UploadRound';
 import ManageTeams from './ManageTeams';
 import ManagePlayers from './ManagePlayers';
@@ -33,7 +34,7 @@ export default function AdminPage() {
     setLoggingIn(true);
     setError('');
     const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
-    if (authError) setError(authError.message);
+    if (authError) setError(friendlyError(authError));
     setLoggingIn(false);
   }
 
@@ -58,7 +59,7 @@ export default function AdminPage() {
             </div>
             <div className="card-body p-4">
               <p className="text-muted mb-3">This page is for the league admin only.</p>
-              <form onSubmit={handleLogin}>
+              <form onSubmit={handleLogin} action="#" method="post">
                 <div className="mb-3">
                   <label className="form-label fw-semibold">Email</label>
                   <input

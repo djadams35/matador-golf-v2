@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
+import { friendlyAdminError } from '../../utils/errorUtils';
 
 export default function ManageDegens() {
   const [players, setPlayers] = useState([]);
@@ -28,12 +29,12 @@ export default function ManageDegens() {
     const isDegen = !!degens[playerId];
     if (isDegen) {
       const { error } = await supabase.from('degens').delete().eq('player_id', playerId);
-      if (error) { setMessage({ type: 'error', text: error.message }); return; }
+      if (error) { setMessage({ type: 'error', text: friendlyAdminError(error) }); return; }
       setDegens(prev => { const next = { ...prev }; delete next[playerId]; return next; });
       setMessage({ type: 'success', text: `${playerName} removed from Degens.` });
     } else {
       const { error } = await supabase.from('degens').upsert({ player_id: playerId, active: true, has_paid: false }, { onConflict: 'player_id' });
-      if (error) { setMessage({ type: 'error', text: error.message }); return; }
+      if (error) { setMessage({ type: 'error', text: friendlyAdminError(error) }); return; }
       setDegens(prev => ({ ...prev, [playerId]: { active: true, has_paid: false } }));
       setMessage({ type: 'success', text: `${playerName} added to Degens.` });
     }
@@ -43,7 +44,7 @@ export default function ManageDegens() {
     e.stopPropagation();
     const hasPaid = !degens[playerId]?.has_paid;
     const { error } = await supabase.from('degens').update({ has_paid: hasPaid }).eq('player_id', playerId);
-    if (error) { setMessage({ type: 'error', text: error.message }); return; }
+    if (error) { setMessage({ type: 'error', text: friendlyAdminError(error) }); return; }
     setDegens(prev => ({ ...prev, [playerId]: { ...prev[playerId], has_paid: hasPaid } }));
     setMessage({ type: 'success', text: `${playerName} marked as ${hasPaid ? 'paid' : 'unpaid'}.` });
   }

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../supabaseClient';
+import { friendlyError } from '../../utils/errorUtils';
 import ScoreInput from './ScoreInput';
 import {
   drills as allDrills,
@@ -113,7 +114,7 @@ export default function ShortGameSessions() {
       notes: form.notes || null,
     });
     if (error) {
-      setMessage({ type: 'error', text: error.message });
+      setMessage({ type: 'error', text: friendlyError(error) });
     } else {
       setShowForm(false);
       setForm(null);

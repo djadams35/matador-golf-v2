@@ -153,11 +153,18 @@ export default function UploadRound() {
       setSubAssignments(assignments);
 
       setParsed({ file, ...result });
+      const csvWarnings = result.warnings || [];
+      const allWarnings = [
+        ...csvWarnings,
+        ...(unassigned.length > 0
+          ? [`${unassigned.length} player(s) not on any team roster — assign them below before saving.`]
+          : []),
+      ];
       setStatus({
-        type: unassigned.length > 0 ? 'warning' : 'info',
-        message: unassigned.length > 0
-          ? `Parsed ${result.players.length} players. ${unassigned.length} player(s) are not on any team roster — assign them below before saving.`
-          : `Parsed ${result.players.length} players. Review below, then click "Save Round".`
+        type: allWarnings.length > 0 ? 'warning' : 'info',
+        message: allWarnings.length > 0
+          ? `Parsed ${result.players.length} players. Please review:\n• ${allWarnings.join('\n• ')}`
+          : `Parsed ${result.players.length} players. Review below, then click "Save Round".`,
       });
     } catch (err) {
       setStatus({ type: 'error', message: err.message });

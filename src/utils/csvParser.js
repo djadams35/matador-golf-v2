@@ -16,6 +16,28 @@ import Papa from 'papaparse';
  *     parsRow: [9 numbers],
  *   }
  */
+function validatePlayers(players) {
+  const warnings = [];
+  if (players.length < 2) {
+    warnings.push('Only ' + players.length + ' player(s) found — check that the file is a valid round export.');
+  }
+  players.forEach(p => {
+    if (!p.name) {
+      warnings.push('A player row has an empty name — it may be parsed incorrectly.');
+    }
+    if (isNaN(p.fullHandicap)) {
+      warnings.push(`${p.name}: handicap could not be read (got "${p.fullHandicap}").`);
+    } else if (p.fullHandicap < -5 || p.fullHandicap > 30) {
+      warnings.push(`${p.name}: handicap ${p.fullHandicap} looks out of range (expected -5 to 30).`);
+    }
+    const badScores = p.scores.map((s, i) => ({ hole: i + 1, score: s })).filter(h => h.score === 0 || h.score > 15);
+    if (badScores.length > 0) {
+      warnings.push(`${p.name}: suspicious scores on hole(s) ${badScores.map(h => h.hole).join(', ')} — verify before saving.`);
+    }
+  });
+  return warnings;
+}
+
 export function parseRoundCSV(file) {
   return new Promise((resolve, reject) => {
     // First pass: detect front vs back 9 from headers
@@ -71,7 +93,7 @@ export function parseRoundCSV(file) {
                 };
               });
 
-              resolve({ section, players, parScores });
+              resolve({ section, players, parScores, warnings: validatePlayers(players) });
             } catch (err) {
               reject(new Error('Error processing CSV data: ' + err.message));
             }

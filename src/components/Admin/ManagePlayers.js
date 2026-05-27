@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
+import { friendlyAdminError } from '../../utils/errorUtils';
 
 export default function ManagePlayers() {
   const [players, setPlayers] = useState([]);
@@ -16,7 +17,7 @@ export default function ManagePlayers() {
       .from('players')
       .select('*')
       .order('name');
-    if (error) setMessage({ type: 'error', text: error.message });
+    if (error) setMessage({ type: 'error', text: friendlyAdminError(error) });
     else setPlayers(data || []);
     setLoading(false);
   }
@@ -26,7 +27,7 @@ export default function ManagePlayers() {
     if (!newName.trim()) return;
     setSaving(true);
     const { error } = await supabase.from('players').insert({ name: newName.trim() });
-    if (error) setMessage({ type: 'error', text: error.message });
+    if (error) setMessage({ type: 'error', text: friendlyAdminError(error) });
     else {
       setNewName('');
       setMessage({ type: 'success', text: `Added ${newName.trim()}` });
@@ -38,7 +39,7 @@ export default function ManagePlayers() {
   async function deletePlayer(id, name) {
     if (!window.confirm(`Delete player "${name}"? This will also remove all their scores.`)) return;
     const { error } = await supabase.from('players').delete().eq('id', id);
-    if (error) setMessage({ type: 'error', text: error.message });
+    if (error) setMessage({ type: 'error', text: friendlyAdminError(error) });
     else {
       setMessage({ type: 'success', text: `Deleted ${name}` });
       fetchPlayers();

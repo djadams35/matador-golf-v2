@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
+import { friendlyError } from '../../utils/errorUtils';
 import ScoreInput from './ScoreInput';
 import {
   monthPlans,
@@ -145,7 +146,7 @@ export default function RangeSessions() {
       notes: form.notes || null,
     });
     if (error) {
-      setMessage({ type: 'error', text: error.message });
+      setMessage({ type: 'error', text: friendlyError(error) });
     } else {
       setShowForm(false);
       setForm(null);

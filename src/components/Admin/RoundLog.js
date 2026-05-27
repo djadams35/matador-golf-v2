@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
+import { friendlyAdminError } from '../../utils/errorUtils';
 import { calculateSkins } from '../../utils/skinsCalculator';
 import { calculateMatchPlay } from '../../utils/matchPlayCalculator';
 
@@ -21,7 +22,7 @@ export default function RoundLog() {
       .from('rounds')
       .select('*')
       .order('week_number', { ascending: false });
-    if (error) setMessage({ type: 'error', text: error.message });
+    if (error) setMessage({ type: 'error', text: friendlyAdminError(error) });
     else setRounds(data || []);
     setLoading(false);
   }
@@ -46,7 +47,7 @@ export default function RoundLog() {
     }).eq('id', r.id);
 
     if (error) {
-      setMessage({ type: 'error', text: error.message });
+      setMessage({ type: 'error', text: friendlyAdminError(error) });
     } else {
       setMessage({ type: 'success', text: `Updated "${r.file_name}"` });
       cancelEdit(r.id);
@@ -61,7 +62,7 @@ export default function RoundLog() {
     await supabase.storage.from('round-csvs').remove([round.storage_path]);
 
     const { error } = await supabase.from('rounds').delete().eq('id', round.id);
-    if (error) setMessage({ type: 'error', text: error.message });
+    if (error) setMessage({ type: 'error', text: friendlyAdminError(error) });
     else {
       setMessage({ type: 'success', text: `Deleted "${round.file_name}"` });
       fetchRounds();

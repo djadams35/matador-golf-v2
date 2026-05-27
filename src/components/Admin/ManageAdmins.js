@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../../supabaseClient';
+import { friendlyAdminError } from '../../utils/errorUtils';
 
 export default function ManageAdmins() {
   const [cpNew, setCpNew] = useState('');
@@ -15,7 +16,7 @@ export default function ManageAdmins() {
 
     setSaving(true);
     const { error } = await supabase.auth.updateUser({ password: cpNew });
-    if (error) setMessage({ type: 'error', text: error.message });
+    if (error) setMessage({ type: 'error', text: friendlyAdminError(error) });
     else {
       setMessage({ type: 'success', text: 'Password updated successfully.' });
       setCpNew(''); setCpConfirm('');

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Papa from 'papaparse';
 import { supabase } from '../../supabaseClient';
+import { friendlyAdminError } from '../../utils/errorUtils';
 
 export default function ManageTeams() {
   const [teams, setTeams] = useState([]);
@@ -22,7 +23,7 @@ export default function ManageTeams() {
       `).order('name'),
       supabase.from('players').select('id, name').order('name'),
     ]);
-    if (teamsRes.error) setMessage({ type: 'error', text: teamsRes.error.message });
+    if (teamsRes.error) setMessage({ type: 'error', text: friendlyAdminError(teamsRes.error) });
     else setTeams(teamsRes.data || []);
     if (playersRes.data) setPlayers(playersRes.data);
     setLoading(false);
@@ -138,7 +139,7 @@ export default function ManageTeams() {
     if (!window.confirm(`Delete team "${name}"? Match results referencing this team will also be deleted.`)) return;
     await supabase.from('team_players').delete().eq('team_id', id);
     const { error } = await supabase.from('teams').delete().eq('id', id);
-    if (error) setMessage({ type: 'error', text: error.message });
+    if (error) setMessage({ type: 'error', text: friendlyAdminError(error) });
     else { setMessage({ type: 'success', text: `Deleted ${name}` }); fetchData(); }
   }
 

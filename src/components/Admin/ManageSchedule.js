@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Papa from 'papaparse';
 import { supabase } from '../../supabaseClient';
+import { friendlyAdminError } from '../../utils/errorUtils';
 
 export default function ManageSchedule() {
   const [schedule, setSchedule] = useState([]);
@@ -130,7 +131,7 @@ export default function ManageSchedule() {
       team_a_id: newEntry.team_a_id,
       team_b_id: newEntry.team_b_id,
     }, { onConflict: 'week_number,team_a_id' });
-    if (error) setMessage({ type: 'error', text: error.message });
+    if (error) setMessage({ type: 'error', text: friendlyAdminError(error) });
     else {
       setNewEntry({ week_number: '', team_a_id: '', team_b_id: '' });
       setMessage({ type: 'success', text: 'Matchup saved!' });
@@ -142,7 +143,7 @@ export default function ManageSchedule() {
   async function deleteEntry(id) {
     if (!window.confirm('Remove this matchup?')) return;
     const { error } = await supabase.from('schedule').delete().eq('id', id);
-    if (error) setMessage({ type: 'error', text: error.message });
+    if (error) setMessage({ type: 'error', text: friendlyAdminError(error) });
     else { setMessage({ type: 'success', text: 'Removed.' }); fetchData(); }
   }
 
@@ -170,7 +171,7 @@ export default function ManageSchedule() {
       no_reschedule: rainoutForm.no_reschedule,
       original_date: originalDate,
     }, { onConflict: 'week_number' });
-    if (error) { setMessage({ type: 'error', text: error.message }); setSaving(false); return; }
+    if (error) { setMessage({ type: 'error', text: friendlyAdminError(error) }); setSaving(false); return; }
 
     setMessage({ type: 'success', text: `Week ${weekNum} marked as rained out.` });
     fetchData();
@@ -182,7 +183,7 @@ export default function ManageSchedule() {
     if (!window.confirm(`Clear rainout status for Week ${weekNum}?`)) return;
     setSaving(true);
     const { error } = await supabase.from('schedule_week_status').delete().eq('week_number', weekNum);
-    if (error) setMessage({ type: 'error', text: error.message });
+    if (error) setMessage({ type: 'error', text: friendlyAdminError(error) });
     else { setMessage({ type: 'success', text: `Week ${weekNum} rainout cleared.` }); fetchData(); }
     setEditingRainout(null);
     setSaving(false);
