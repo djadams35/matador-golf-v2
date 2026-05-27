@@ -34,7 +34,12 @@ export default function AdminPage() {
     setLoggingIn(true);
     setError('');
     const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
-    if (authError) setError(friendlyError(authError));
+    if (authError) {
+      setError(friendlyError(authError));
+    } else if (window.PasswordCredential) {
+      const cred = new window.PasswordCredential({ id: email, password });
+      navigator.credentials.store(cred);
+    }
     setLoggingIn(false);
   }
 
@@ -59,7 +64,7 @@ export default function AdminPage() {
             </div>
             <div className="card-body p-4">
               <p className="text-muted mb-3">This page is for the league admin only.</p>
-              <form onSubmit={handleLogin} action="#" method="post">
+              <form onSubmit={handleLogin}>
                 <div className="mb-3">
                   <label className="form-label fw-semibold">Email</label>
                   <input
