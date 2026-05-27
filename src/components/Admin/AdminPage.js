@@ -64,6 +64,7 @@ export default function AdminPage() {
                   <input
                     type="email"
                     className="form-control"
+                    name="email"
                     value={email}
                     onChange={e => setEmail(e.target.value)}
                     autoFocus
@@ -75,6 +76,7 @@ export default function AdminPage() {
                   <input
                     type="password"
                     className="form-control"
+                    name="password"
                     value={password}
                     onChange={e => setPassword(e.target.value)}
                     autoComplete="current-password"
