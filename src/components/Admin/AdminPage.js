@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
 import UploadRound from './UploadRound';
@@ -11,54 +11,44 @@ import ManageAdmins from './ManageAdmins';
 import ManagePractice from './ManagePractice';
 
 export default function AdminPage() {
-  const [authenticated, setAuthenticated] = useState(
-    () => sessionStorage.getItem('adminAuth') === 'true'
-  );
-  const [currentUsername, setCurrentUsername] = useState(
-    () => sessionStorage.getItem('adminUsername') || ''
-  );
-  const [username, setUsername] = useState('');
+  const [session, setSession] = useState(undefined); // undefined = loading, null = logged out
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loggingIn, setLoggingIn] = useState(false);
   const location = useLocation();
 
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session ?? null);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+      setSession(s ?? null);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
   async function handleLogin(e) {
     e.preventDefault();
     setLoggingIn(true);
     setError('');
-
-    const { data, error: dbError } = await supabase
-      .from('admin_users')
-      .select('id, username')
-      .eq('username', username.trim().toLowerCase())
-      .eq('password', password)
-      .maybeSingle();
-
-    if (dbError) {
-      setError('Login error: ' + dbError.message);
-    } else if (!data) {
-      setError('Incorrect username or password.');
-    } else {
-      sessionStorage.setItem('adminAuth', 'true');
-      sessionStorage.setItem('adminUsername', data.username);
-      setCurrentUsername(data.username);
-      setAuthenticated(true);
-    }
-
+    const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+    if (authError) setError(authError.message);
     setLoggingIn(false);
   }
 
-  function handleLogout() {
-    sessionStorage.removeItem('adminAuth');
-    sessionStorage.removeItem('adminUsername');
-    setAuthenticated(false);
-    setCurrentUsername('');
-    setUsername('');
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    setEmail('');
     setPassword('');
   }
 
-  if (!authenticated) {
+  // Still loading session
+  if (session === undefined) {
+    return <div className="text-center py-5"><span className="spinner-border text-matador-red"></span></div>;
+  }
+
+  if (!session) {
     return (
       <div className="row justify-content-center">
         <div className="col-12 col-sm-8 col-md-5">
@@ -70,14 +60,14 @@ export default function AdminPage() {
               <p className="text-muted mb-3">This page is for the league admin only.</p>
               <form onSubmit={handleLogin}>
                 <div className="mb-3">
-                  <label className="form-label fw-semibold">Username</label>
+                  <label className="form-label fw-semibold">Email</label>
                   <input
-                    type="text"
+                    type="email"
                     className="form-control"
-                    value={username}
-                    onChange={e => setUsername(e.target.value)}
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
                     autoFocus
-                    autoComplete="username"
+                    autoComplete="email"
                   />
                 </div>
                 <div className="mb-3">
@@ -103,13 +93,13 @@ export default function AdminPage() {
   }
 
   const tabs = [
-    { path: '/admin',           label: 'Upload Round', icon: 'cloud-upload' },
-    { path: '/admin/log',       label: 'Round Log',    icon: 'journal-text' },
-    { path: '/admin/teams',     label: 'Teams',        icon: 'people' },
-    { path: '/admin/players',   label: 'Players',      icon: 'person' },
-    { path: '/admin/schedule',  label: 'Schedule',     icon: 'calendar3' },
-    { path: '/admin/degens',    label: 'Degens',       icon: 'dice-5' },
-    { path: '/admin/settings',  label: 'Settings',     icon: 'gear' },
+    { path: '/admin',          label: 'Upload Round', icon: 'cloud-upload' },
+    { path: '/admin/log',      label: 'Round Log',    icon: 'journal-text' },
+    { path: '/admin/teams',    label: 'Teams',        icon: 'people' },
+    { path: '/admin/players',  label: 'Players',      icon: 'person' },
+    { path: '/admin/schedule', label: 'Schedule',     icon: 'calendar3' },
+    { path: '/admin/degens',   label: 'Degens',       icon: 'dice-5' },
+    { path: '/admin/settings', label: 'Settings',     icon: 'gear' },
     { path: '/admin/practice', label: 'Practice',     icon: 'golf' },
   ];
 
@@ -120,7 +110,7 @@ export default function AdminPage() {
           <i className="bi bi-gear-fill me-2"></i>Admin Panel
         </h2>
         <div className="d-flex align-items-center gap-2">
-          <span className="text-muted small"><i className="bi bi-person-circle me-1"></i>{currentUsername}</span>
+          <span className="text-muted small"><i className="bi bi-person-circle me-1"></i>{session.user.email}</span>
           <button className="btn btn-outline-secondary btn-sm" onClick={handleLogout}>
             <i className="bi bi-box-arrow-right me-1"></i>Logout
           </button>
@@ -147,7 +137,7 @@ export default function AdminPage() {
         <Route path="players" element={<ManagePlayers />} />
         <Route path="schedule" element={<ManageSchedule />} />
         <Route path="degens" element={<ManageDegens />} />
-        <Route path="settings" element={<ManageAdmins currentUsername={currentUsername} />} />
+        <Route path="settings" element={<ManageAdmins />} />
         <Route path="practice" element={<ManagePractice />} />
       </Routes>
     </div>
