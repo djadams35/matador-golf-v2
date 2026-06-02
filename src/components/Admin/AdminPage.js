@@ -19,7 +19,7 @@ export default function AdminPage() {
   const [loggingIn, setLoggingIn] = useState(false);
   const location = useLocation();
 
-  const INACTIVITY_MS = 24 * 60 * 60 * 1000; // 24 hours
+  const INACTIVITY_MS = 4 * 60 * 60 * 1000; // 4 hours
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
