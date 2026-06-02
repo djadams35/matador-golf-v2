@@ -19,15 +19,42 @@ export default function AdminPage() {
   const [loggingIn, setLoggingIn] = useState(false);
   const location = useLocation();
 
+  const INACTIVITY_MS = 24 * 60 * 60 * 1000; // 24 hours
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session ?? null);
+      const s = data.session ?? null;
+      if (s) {
+        const last = parseInt(localStorage.getItem('adminLastActivity') || '0', 10);
+        if (last && Date.now() - last > INACTIVITY_MS) {
+          supabase.auth.signOut();
+          localStorage.removeItem('adminLastActivity');
+          setSession(null);
+          return;
+        }
+        localStorage.setItem('adminLastActivity', String(Date.now()));
+      }
+      setSession(s);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+      if (s) localStorage.setItem('adminLastActivity', String(Date.now()));
+      else localStorage.removeItem('adminLastActivity');
       setSession(s ?? null);
     });
-    return () => subscription.unsubscribe();
-  }, []);
+
+    const updateActivity = () => {
+      if (localStorage.getItem('adminLastActivity')) {
+        localStorage.setItem('adminLastActivity', String(Date.now()));
+      }
+    };
+    window.addEventListener('click', updateActivity);
+    window.addEventListener('keydown', updateActivity);
+    return () => {
+      subscription.unsubscribe();
+      window.removeEventListener('click', updateActivity);
+      window.removeEventListener('keydown', updateActivity);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleLogin(e) {
     e.preventDefault();
@@ -36,9 +63,10 @@ export default function AdminPage() {
     const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
     if (authError) {
       setError(friendlyError(authError));
-    } else if (window.PasswordCredential) {
-      const cred = new window.PasswordCredential({ id: email, password });
-      navigator.credentials.store(cred);
+    } else {
+      // Full page reload so Chrome detects the successful login and offers to save credentials
+      window.location.replace('/admin');
+      return;
     }
     setLoggingIn(false);
   }

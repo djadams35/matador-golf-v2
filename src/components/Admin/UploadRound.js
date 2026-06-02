@@ -442,6 +442,7 @@ export default function UploadRound() {
                     <option value="">Not subbing for anyone</option>
                     {permanentRoster
                       .filter(r => !playingNames.has(r.name))
+                      .filter(r => !Object.entries(subAssignments).some(([otherName, id]) => id === r.id && otherName !== p.name))
                       .map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                   </select>
                 </div>
