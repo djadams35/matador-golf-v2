@@ -293,6 +293,9 @@ export default function MatchResults() {
                         {team.winner === 'A' ? aName : team.winner === 'B' ? bName : 'Tie'}
                       </span>
                       <span className="text-muted small ms-1">{team.winner === 'tie' ? '+0.5 each' : '+1'}</span>
+                      {team.teamANet != null && team.teamBNet != null && team.winner !== 'tie' && (
+                        <div className="text-muted small">by {Math.abs(team.teamANet - team.teamBNet)}</div>
+                      )}
                     </td>
                   </tr>
                 </tbody>
