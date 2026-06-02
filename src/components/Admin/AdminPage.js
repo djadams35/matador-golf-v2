@@ -64,7 +64,10 @@ export default function AdminPage() {
     if (authError) {
       setError(friendlyError(authError));
     } else {
-      // Full page reload so Chrome detects the successful login and offers to save credentials
+      if (window.PasswordCredential) {
+        const cred = new window.PasswordCredential({ id: email, password });
+        await navigator.credentials.store(cred);
+      }
       window.location.replace('/admin');
       return;
     }
@@ -92,7 +95,7 @@ export default function AdminPage() {
             </div>
             <div className="card-body p-4">
               <p className="text-muted mb-3">This page is for the league admin only.</p>
-              <form onSubmit={handleLogin}>
+              <form onSubmit={handleLogin} action="" method="post">
                 <div className="mb-3">
                   <label className="form-label fw-semibold">Email</label>
                   <input
