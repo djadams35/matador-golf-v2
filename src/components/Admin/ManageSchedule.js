@@ -189,6 +189,81 @@ export default function ManageSchedule() {
     setSaving(false);
   }
 
+  // Move a rescheduled rainout week to its new date, then renumber every week 1..N by play date.
+  // Reordering by date naturally lands the rescheduled week wherever its date falls and closes any gaps.
+  async function moveRainoutToEnd(weekNum) {
+    const status = rainoutStatuses[weekNum];
+    if (!status?.reschedule_date) {
+      setMessage({ type: 'error', text: 'Set a reschedule date for this week before moving it.' });
+      return;
+    }
+    if (!window.confirm(
+      `Move Week ${weekNum} to its rescheduled date (${formatDate(status.reschedule_date)}) and renumber all weeks in date order? `
+      + `Earlier weeks keep their numbers; later weeks shift to close the gap.`
+    )) return;
+
+    setSaving(true);
+    const OFFSET = 10000;
+    try {
+      // 1. Apply the reschedule date to the rained-out week's matchups
+      const { error: dateErr } = await supabase
+        .from('schedule').update({ date: status.reschedule_date }).eq('week_number', weekNum);
+      if (dateErr) throw dateErr;
+
+      // 2. Fetch all matchups fresh (with the updated date)
+      const { data: rows, error: fetchErr } = await supabase
+        .from('schedule').select('id, week_number, team_a_id, date');
+      if (fetchErr) throw fetchErr;
+
+      // 3. Earliest date per week
+      const weekDate = {};
+      rows.forEach(r => {
+        const cur = weekDate[r.week_number];
+        if (!cur || (r.date && r.date < cur)) weekDate[r.week_number] = r.date;
+      });
+
+      // 4. Sort weeks by date (then old number), assign sequential new numbers
+      const oldWeeks = Object.keys(weekDate).map(Number).sort((a, b) => {
+        const da = weekDate[a] || '9999-12-31';
+        const db = weekDate[b] || '9999-12-31';
+        if (da !== db) return da < db ? -1 : 1;
+        return a - b;
+      });
+      const mapping = {};
+      oldWeeks.forEach((ow, i) => { mapping[ow] = i + 1; });
+
+      if (!oldWeeks.some(ow => mapping[ow] !== ow)) {
+        setMessage({ type: 'success', text: 'Schedule is already in date order — nothing to renumber.' });
+        fetchData();
+        setSaving(false);
+        return;
+      }
+
+      // 5. Two-phase renumber of schedule rows (offset first to avoid unique-constraint collisions)
+      await Promise.all(rows.map(r =>
+        supabase.from('schedule').update({ week_number: mapping[r.week_number] + OFFSET }).eq('id', r.id)
+      ));
+      await Promise.all(rows.map(r =>
+        supabase.from('schedule').update({ week_number: mapping[r.week_number] }).eq('id', r.id)
+      ));
+
+      // 6. Same two-phase renumber for rainout statuses (keyed by week_number)
+      const statusWeeks = Object.keys(rainoutStatuses).map(Number).filter(w => mapping[w] !== undefined);
+      await Promise.all(statusWeeks.map(w =>
+        supabase.from('schedule_week_status').update({ week_number: mapping[w] + OFFSET }).eq('week_number', w)
+      ));
+      await Promise.all(statusWeeks.map(w =>
+        supabase.from('schedule_week_status').update({ week_number: mapping[w] }).eq('week_number', mapping[w] + OFFSET)
+      ));
+
+      setMessage({ type: 'success', text: `Week ${weekNum} moved to ${formatDate(status.reschedule_date)} (now Week ${mapping[weekNum]}). Schedule renumbered by date.` });
+      fetchData();
+    } catch (err) {
+      setMessage({ type: 'error', text: friendlyAdminError(err) });
+    }
+    setSaving(false);
+  }
+
   function formatDate(dateStr) {
     if (!dateStr) return '';
     const [y, m, d] = dateStr.split('-');
@@ -288,6 +363,11 @@ export default function ManageSchedule() {
                   <div className="d-flex gap-2">
                     {isRainout ? (
                       <>
+                        {status.reschedule_date && !status.no_reschedule && (
+                          <button className="btn btn-sm btn-warning" onClick={() => moveRainoutToEnd(weekNum)} disabled={saving}>
+                            <i className="bi bi-arrow-bar-down me-1"></i>Move &amp; Renumber
+                          </button>
+                        )}
                         <button className="btn btn-sm btn-outline-light" onClick={() => startEditRainout(weekNum)}>
                           <i className="bi bi-pencil me-1"></i>Edit
                         </button>
