@@ -23,24 +23,40 @@ export default function AdminPage() {
   const INACTIVITY_MS = 4 * 60 * 60 * 1000; // 4 hours
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
+    let mounted = true;
+
+    // Sign out if the stored activity timestamp is older than the inactivity window.
+    const checkExpiry = async () => {
+      const last = parseInt(localStorage.getItem('adminLastActivity') || '0', 10);
+      if (last && Date.now() - last > INACTIVITY_MS) {
+        localStorage.removeItem('adminLastActivity');
+        await supabase.auth.signOut();
+        if (mounted) setSession(null);
+        return true;
+      }
+      return false;
+    };
+
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (!mounted) return;
       const s = data.session ?? null;
       if (s) {
-        const last = parseInt(localStorage.getItem('adminLastActivity') || '0', 10);
-        if (last && Date.now() - last > INACTIVITY_MS) {
-          supabase.auth.signOut();
-          localStorage.removeItem('adminLastActivity');
-          setSession(null);
-          return;
+        if (await checkExpiry()) return;
+        // Seed a timestamp for sessions created before this feature existed
+        if (!localStorage.getItem('adminLastActivity')) {
+          localStorage.setItem('adminLastActivity', String(Date.now()));
         }
-        localStorage.setItem('adminLastActivity', String(Date.now()));
       }
       setSession(s);
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
-      if (s) localStorage.setItem('adminLastActivity', String(Date.now()));
-      else localStorage.removeItem('adminLastActivity');
-      setSession(s ?? null);
+
+    // Only stamp activity on a real login / clear it on logout. Crucially we do
+    // NOT touch the timestamp on INITIAL_SESSION or TOKEN_REFRESHED, otherwise a
+    // background token refresh or page reload would reset the idle timer forever.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
+      if (event === 'SIGNED_IN') localStorage.setItem('adminLastActivity', String(Date.now()));
+      else if (event === 'SIGNED_OUT') localStorage.removeItem('adminLastActivity');
+      if (mounted) setSession(s ?? null);
     });
 
     const updateActivity = () => {
@@ -50,10 +66,16 @@ export default function AdminPage() {
     };
     window.addEventListener('click', updateActivity);
     window.addEventListener('keydown', updateActivity);
+
+    // Periodic check so a long-open idle tab logs out without needing a reload
+    const interval = setInterval(checkExpiry, 60 * 1000);
+
     return () => {
+      mounted = false;
       subscription.unsubscribe();
       window.removeEventListener('click', updateActivity);
       window.removeEventListener('keydown', updateActivity);
+      clearInterval(interval);
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
