@@ -283,39 +283,42 @@ export default function PlayerLeaderboards() {
   });
 
   // ── Strength of Schedule ───────────────────────────────────────────────────
-  // Based on how much each opponent beats their net par (outperforms their handicap),
-  // averaged across everyone a player faced. Higher = tougher schedule.
-  const encounters = {};  // name -> [opponentName, ...]
+  // Based on how each opponent actually played in the round they faced you:
+  // strokes they beat their net par by that week, averaged over all matchups.
+  // Higher = you caught opponents playing above their handicaps (tougher schedule).
+  const encounters = {};  // name -> [{ opponent, week }]
   matchResults.forEach(row => {
     [row.low_match_detail, row.high_match_detail].forEach(d => {
       if (!d || !d.playerA || !d.playerB) return;
       if (!encounters[d.playerA]) encounters[d.playerA] = [];
       if (!encounters[d.playerB]) encounters[d.playerB] = [];
-      encounters[d.playerA].push(d.playerB);
-      encounters[d.playerB].push(d.playerA);
+      encounters[d.playerA].push({ opponent: d.playerB, week: row.week_number });
+      encounters[d.playerB].push({ opponent: d.playerA, week: row.week_number });
     });
   });
 
   const rosterNameSet = new Set(data.map(p => p.name));
-  const avgNetByName = {};
-  // perfVsHcp: avg strokes a player beats their net par by, per 9 holes (positive = outperformed handicap)
-  const perfVsHcp = {};
-  data.forEach(p => {
-    if (p.avgNet) avgNetByName[p.name] = parseFloat(p.avgNet);
-    if (p.holesGraded > 0) perfVsHcp[p.name] = -((p.netToParSum / p.holesGraded) * 9);
-  });
+  const statByName = {};
+  data.forEach(p => { statByName[p.name] = p; });
 
   const strengthOfSchedule = Object.keys(encounters)
     .filter(n => rosterNameSet.has(n))
     .map(n => {
-      const opps = encounters[n].filter(o => perfVsHcp[o] !== undefined);
-      if (opps.length === 0) return null;
-      const oppPerf = opps.reduce((a, o) => a + perfVsHcp[o], 0) / opps.length;
-      const oppNets = opps.map(o => avgNetByName[o]).filter(v => v != null);
-      const avgOppNet = oppNets.length ? (oppNets.reduce((a, b) => a + b, 0) / oppNets.length).toFixed(1) : null;
+      const encs = encounters[n]
+        .map(e => {
+          const oppStat = statByName[e.opponent];
+          const netToPar = oppStat?.netToParByWeek?.[e.week];
+          const oppNet = oppStat?.netByWeek?.[e.week];
+          return { beatHc: netToPar != null ? -netToPar : null, oppNet };
+        })
+        .filter(e => e.beatHc != null);
+      if (encs.length === 0) return null;
+      const oppPerf = encs.reduce((a, e) => a + e.beatHc, 0) / encs.length;
+      const nets = encs.map(e => e.oppNet).filter(v => v != null);
+      const avgOppNet = nets.length ? (nets.reduce((a, b) => a + b, 0) / nets.length).toFixed(1) : null;
       return {
         name: n,
-        matches: opps.length,
+        matches: encs.length,
         oppPerf: Math.round(oppPerf * 10) / 10,
         avgOppNet,
       };
@@ -706,7 +709,7 @@ export default function PlayerLeaderboards() {
             </div>
           </div>
           <div className="card-footer text-muted small">
-            Opp vs HC = avg strokes opponents beat their net par by (per 9). Higher = faced opponents outperforming their handicaps.
+            Opp vs HC = avg strokes your opponents beat their net par by in the rounds they played you. Higher = caught opponents playing above their handicaps. Click a name for the breakdown.
           </div>
         </div>
       )}
