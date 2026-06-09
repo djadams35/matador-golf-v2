@@ -191,44 +191,64 @@ export default function PlayerLeaderboards() {
   )].sort((a, b) => b - a);
   const last3Weeks = allWeekNums.slice(0, 3);
 
-  const playerMatchPts = {};
-  matchResults
-    .filter(r => last3Weeks.includes(r.week_number))
-    .forEach(row => {
-      [row.low_match_detail, row.high_match_detail].forEach(detail => {
-        if (!detail) return;
-        const { playerA, playerB, winner } = detail;
-        if (playerMatchPts[playerA] === undefined) playerMatchPts[playerA] = 0;
-        if (playerMatchPts[playerB] === undefined) playerMatchPts[playerB] = 0;
-        if (winner === 'A') playerMatchPts[playerA] += 1;
-        else if (winner === 'B') playerMatchPts[playerB] += 1;
-        else { playerMatchPts[playerA] += 0.5; playerMatchPts[playerB] += 0.5; }
+  // Compute a sorted power ranking for a given rolling window of weeks.
+  const computeRankings = (weekList) => {
+    if (weekList.length === 0) return [];
+    const matchPts = {};
+    matchResults
+      .filter(r => weekList.includes(r.week_number))
+      .forEach(row => {
+        [row.low_match_detail, row.high_match_detail].forEach(detail => {
+          if (!detail) return;
+          const { playerA, playerB, winner } = detail;
+          if (matchPts[playerA] === undefined) matchPts[playerA] = 0;
+          if (matchPts[playerB] === undefined) matchPts[playerB] = 0;
+          if (winner === 'A') matchPts[playerA] += 1;
+          else if (winner === 'B') matchPts[playerB] += 1;
+          else { matchPts[playerA] += 0.5; matchPts[playerB] += 0.5; }
+        });
       });
-    });
 
-  const prRaw = data
-    .map(p => {
-      const weekScores = last3Weeks.map(w => p.netByWeek[w]).filter(s => s !== undefined);
-      if (weekScores.length === 0) return null;
-      const avgNet = parseFloat((weekScores.reduce((a, b) => a + b, 0) / weekScores.length).toFixed(1));
-      const totalPts = playerMatchPts[p.name] || 0;
-      return { name: p.name, weeksPlayed: weekScores.length, avgNet, totalPts };
-    })
-    .filter(Boolean);
+    const raw = data
+      .map(p => {
+        const weekScores = weekList.map(w => p.netByWeek[w]).filter(s => s !== undefined);
+        if (weekScores.length === 0) return null;
+        const avgNet = parseFloat((weekScores.reduce((a, b) => a + b, 0) / weekScores.length).toFixed(1));
+        const totalPts = matchPts[p.name] || 0;
+        return { name: p.name, weeksPlayed: weekScores.length, avgNet, totalPts };
+      })
+      .filter(Boolean);
 
-  const nets = prRaw.map(p => p.avgNet);
-  const pts  = prRaw.map(p => p.totalPts);
-  const minNet = Math.min(...nets), maxNet = Math.max(...nets);
-  const minPts = Math.min(...pts),  maxPts = Math.max(...pts);
+    if (raw.length === 0) return [];
+    const nets = raw.map(p => p.avgNet);
+    const pts  = raw.map(p => p.totalPts);
+    const minNet = Math.min(...nets), maxNet = Math.max(...nets);
+    const minPts = Math.min(...pts),  maxPts = Math.max(...pts);
 
-  const powerRankings = prRaw
-    .map(p => {
-      const netNorm = maxNet === minNet ? 0.5 : (maxNet - p.avgNet) / (maxNet - minNet);
-      const ptsNorm = maxPts === minPts ? 0.5 : (p.totalPts - minPts) / (maxPts - minPts);
-      const rating  = Math.round((netNorm + ptsNorm) / 2 * 100);
-      return { ...p, rating };
-    })
-    .sort((a, b) => b.rating - a.rating);
+    return raw
+      .map(p => {
+        const netNorm = maxNet === minNet ? 0.5 : (maxNet - p.avgNet) / (maxNet - minNet);
+        const ptsNorm = maxPts === minPts ? 0.5 : (p.totalPts - minPts) / (maxPts - minPts);
+        const rating  = Math.round((netNorm + ptsNorm) / 2 * 100);
+        return { ...p, rating };
+      })
+      .sort((a, b) => b.rating - a.rating);
+  };
+
+  // Previous-week ranking uses the 3-week window shifted back one week, to show movement
+  const prevRankings = computeRankings(allWeekNums.slice(1, 4));
+  const prevPos = {};
+  prevRankings.forEach((p, i) => { prevPos[p.name] = i + 1; });
+  const hasPrevRankings = prevRankings.length > 0;
+
+  const powerRankings = computeRankings(last3Weeks).map((p, i) => {
+    const prev = prevPos[p.name];
+    return {
+      ...p,
+      posChange: prev != null ? prev - (i + 1) : null, // positive = moved up
+      isNew: hasPrevRankings && prev == null,
+    };
+  });
 
   // ── Strength of Schedule ───────────────────────────────────────────────────
   // Based on how much each opponent beats their net par (outperforms their handicap),
@@ -447,7 +467,18 @@ export default function PlayerLeaderboards() {
                     <tbody>
                       {powerRankings.map((p, i) => (
                         <tr key={p.name} className={i === 0 ? 'table-warning' : ''}>
-                          <td>{i === 0 ? '🔥' : i + 1}</td>
+                          <td className="text-nowrap">
+                            {i === 0 ? '🔥' : i + 1}
+                            {p.isNew ? (
+                              <span className="ms-1 small text-primary">NEW</span>
+                            ) : p.posChange != null && p.posChange !== 0 ? (
+                              <span className={`ms-1 small fw-bold ${p.posChange > 0 ? 'text-success' : 'text-danger'}`}>
+                                {p.posChange > 0 ? `▲${p.posChange}` : `▼${Math.abs(p.posChange)}`}
+                              </span>
+                            ) : p.posChange === 0 ? (
+                              <span className="ms-1 small text-muted">–</span>
+                            ) : null}
+                          </td>
                           <td className="fw-semibold">{p.name}</td>
                           <td className="text-center fw-bold">{p.rating}</td>
                           <td className="text-center text-muted small">{p.avgNet}</td>
@@ -458,7 +489,7 @@ export default function PlayerLeaderboards() {
                   </table>
                 </div>
                 </div>
-                <div className="card-footer text-muted small">Rating = avg net + total match pts, normalized 0–100</div>
+                <div className="card-footer text-muted small">Rating = avg net + total match pts, normalized 0–100 &nbsp;·&nbsp; <span className="text-success">▲</span>/<span className="text-danger">▼</span> = position change vs last week</div>
               </div>
             </div>
           )}
