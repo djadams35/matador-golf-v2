@@ -117,9 +117,18 @@ function HoleTable({ playerA, playerB, scoreMap, section, aTeamName, bTeamName }
   );
 }
 
+function formatMatchDate(dateStr) {
+  if (!dateStr) return '';
+  // Take only the date portion and parse components manually to avoid timezone shifts
+  const [y, m, d] = dateStr.slice(0, 10).split('-');
+  if (!y || !m || !d) return dateStr;
+  return new Date(+y, +m - 1, +d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
 export default function MatchResults() {
   const [results, setResults] = useState([]);
   const [weeks, setWeeks] = useState([]);
+  const [weekDates, setWeekDates] = useState({}); // week_number -> scheduled date
   const [selectedWeek, setSelectedWeek] = useState(null);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState({});
@@ -129,21 +138,31 @@ export default function MatchResults() {
 
   async function fetchResults() {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('match_results')
-      .select(`
-        *,
-        team_a:teams!team_a_id(name),
-        team_b:teams!team_b_id(name),
-        rounds(played_date, holes_played)
-      `)
-      .order('week_number', { ascending: false });
+    const [resultsRes, scheduleRes] = await Promise.all([
+      supabase
+        .from('match_results')
+        .select(`
+          *,
+          team_a:teams!team_a_id(name),
+          team_b:teams!team_b_id(name),
+          rounds(played_date, holes_played)
+        `)
+        .order('week_number', { ascending: false }),
+      supabase.from('schedule').select('week_number, date'),
+    ]);
 
+    const { data, error } = resultsRes;
     if (!error && data) {
       setResults(data);
       const uniqueWeeks = [...new Set(data.map(r => r.week_number).filter(Boolean))].sort((a, b) => a - b);
       setWeeks(uniqueWeeks);
       if (uniqueWeeks.length > 0) setSelectedWeek(uniqueWeeks[uniqueWeeks.length - 1]);
+    }
+
+    if (scheduleRes.data) {
+      const map = {};
+      scheduleRes.data.forEach(s => { if (s.date && map[s.week_number] == null) map[s.week_number] = s.date; });
+      setWeekDates(map);
     }
     setLoading(false);
   }
@@ -232,7 +251,21 @@ export default function MatchResults() {
           <div className="card border-0 shadow-sm mb-3" key={r.id}>
             <div className="card-header bg-matador-black text-white">
               <div className="d-flex justify-content-between align-items-start gap-2">
-                <span className="small">{aName} vs {bName}{r.week_number ? ` — Week ${r.week_number}` : ''}{r.rounds?.played_date ? ` — ${r.rounds.played_date}` : ''}</span>
+                <div className="small">
+                  <div>{aName} vs {bName}{r.week_number ? ` — Week ${r.week_number}` : ''}</div>
+                  {(() => {
+                    const scheduled = weekDates[r.week_number];
+                    const played = r.rounds?.played_date;
+                    const playedFmt = formatMatchDate(played);
+                    const schedFmt = formatMatchDate(scheduled);
+                    const parts = [];
+                    if (schedFmt) parts.push(`Scheduled ${schedFmt}`);
+                    if (playedFmt && playedFmt !== schedFmt) parts.push(`Played ${playedFmt}`);
+                    else if (playedFmt && !schedFmt) parts.push(`Played ${playedFmt}`);
+                    if (parts.length === 0) return null;
+                    return <div className="text-white-50" style={{ fontSize: '0.72rem' }}>{parts.join(' · ')}</div>;
+                  })()}
+                </div>
                 <span className="badge bg-light text-dark flex-shrink-0">
                   {r.rounds?.holes_played === 'front' ? 'Front 9' : 'Back 9'}
                 </span>
