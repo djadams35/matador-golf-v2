@@ -10,6 +10,7 @@ import ManageDegens from './ManageDegens';
 import RoundLog from './RoundLog';
 import ManageAdmins from './ManageAdmins';
 import ManagePractice from './ManagePractice';
+import ManageSubs from './ManageSubs';
 
 export default function AdminPage() {
   const [session, setSession] = useState(undefined); // undefined = loading, null = logged out
@@ -138,6 +139,7 @@ export default function AdminPage() {
     { path: '/admin/players',  label: 'Players',      icon: 'person' },
     { path: '/admin/schedule', label: 'Schedule',     icon: 'calendar3' },
     { path: '/admin/degens',   label: 'Degens',       icon: 'dice-5' },
+    { path: '/admin/subs',     label: 'Subs',         icon: 'arrow-left-right' },
     { path: '/admin/settings', label: 'Settings',     icon: 'gear' },
     { path: '/admin/practice', label: 'Practice',     icon: 'golf' },
   ];
@@ -176,6 +178,7 @@ export default function AdminPage() {
         <Route path="players" element={<ManagePlayers />} />
         <Route path="schedule" element={<ManageSchedule />} />
         <Route path="degens" element={<ManageDegens />} />
+        <Route path="subs" element={<ManageSubs />} />
         <Route path="settings" element={<ManageAdmins />} />
         <Route path="practice" element={<ManagePractice />} />
       </Routes>
