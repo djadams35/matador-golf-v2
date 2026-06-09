@@ -225,6 +225,56 @@ export default function PlayerLeaderboards() {
     })
     .sort((a, b) => b.rating - a.rating);
 
+  // ── Strength of Schedule ───────────────────────────────────────────────────
+  // Each opponent's overall match win %, averaged across everyone a player faced.
+  const matchRecord = {}; // name -> { wins, ties, losses, games }
+  const encounters = {};  // name -> [opponentName, ...]
+  const ensureRec = (n) => {
+    if (!matchRecord[n]) matchRecord[n] = { wins: 0, ties: 0, losses: 0, games: 0 };
+    if (!encounters[n]) encounters[n] = [];
+  };
+  matchResults.forEach(row => {
+    [row.low_match_detail, row.high_match_detail].forEach(d => {
+      if (!d || !d.playerA || !d.playerB) return;
+      const { playerA, playerB, winner } = d;
+      ensureRec(playerA); ensureRec(playerB);
+      matchRecord[playerA].games++; matchRecord[playerB].games++;
+      encounters[playerA].push(playerB);
+      encounters[playerB].push(playerA);
+      if (winner === 'A') { matchRecord[playerA].wins++; matchRecord[playerB].losses++; }
+      else if (winner === 'B') { matchRecord[playerB].wins++; matchRecord[playerA].losses++; }
+      else { matchRecord[playerA].ties++; matchRecord[playerB].ties++; }
+    });
+  });
+
+  const winPct = (n) => {
+    const r = matchRecord[n];
+    if (!r || r.games === 0) return 0;
+    return (r.wins + 0.5 * r.ties) / r.games;
+  };
+
+  const rosterNameSet = new Set(data.map(p => p.name));
+  const avgNetByName = {};
+  data.forEach(p => { if (p.avgNet) avgNetByName[p.name] = parseFloat(p.avgNet); });
+
+  const strengthOfSchedule = Object.keys(encounters)
+    .filter(n => rosterNameSet.has(n))
+    .map(n => {
+      const opps = encounters[n];
+      if (opps.length === 0) return null;
+      const sos = opps.reduce((a, o) => a + winPct(o), 0) / opps.length;
+      const oppNets = opps.map(o => avgNetByName[o]).filter(v => v != null);
+      const avgOppNet = oppNets.length ? (oppNets.reduce((a, b) => a + b, 0) / oppNets.length).toFixed(1) : null;
+      return {
+        name: n,
+        matches: opps.length,
+        sosPct: Math.round(sos * 1000) / 10,
+        avgOppNet,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.sosPct - a.sosPct);
+
   // ── Round detail modal content ─────────────────────────────────────────────
   const section   = modalScores[0]?.rounds?.holes_played;
   const parScores = modalScores[0]?.rounds?.par_scores;
@@ -457,6 +507,45 @@ export default function PlayerLeaderboards() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── Strength of Schedule ── */}
+      {strengthOfSchedule.length > 0 && (
+        <div className="card border-0 shadow-sm mb-4">
+          <div className="card-header bg-matador-black text-white d-flex justify-content-between align-items-center">
+            <h6 className="mb-0"><i className="bi bi-shield-shaded me-2 text-warning"></i>Strength of Schedule</h6>
+            <span className="text-muted small">Toughest opponents faced</span>
+          </div>
+          <div className="card-body p-0">
+            <div className="table-responsive">
+              <table className="table table-hover mb-0">
+                <thead className="table-light">
+                  <tr>
+                    <th>#</th>
+                    <th>Player</th>
+                    <th className="text-center">Opp Win %</th>
+                    <th className="text-center">Avg Opp Net</th>
+                    <th className="text-center">Matches</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {strengthOfSchedule.slice(0, 10).map((p, i) => (
+                    <tr key={p.name} className={i === 0 ? 'table-warning' : ''}>
+                      <td>{i === 0 ? '💪' : i + 1}</td>
+                      <td className="fw-semibold">{p.name}</td>
+                      <td className="text-center fw-bold">{p.sosPct}%</td>
+                      <td className="text-center text-muted small">{p.avgOppNet ?? '—'}</td>
+                      <td className="text-center text-muted small">{p.matches}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div className="card-footer text-muted small">
+            Opp Win % = average match-play win rate of every opponent faced. Higher = harder schedule.
+          </div>
         </div>
       )}
 
