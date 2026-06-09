@@ -302,7 +302,9 @@ export default function MatchResults() {
                         {low.winner === 'A' ? low.playerA : low.winner === 'B' ? low.playerB : 'Tie'}
                       </span>
                       <span className="text-muted small ms-1">{low.winner === 'tie' ? '+0.5 each' : '+1'}</span>
-                      <div className="text-muted small">{low.aHolesWon}–{low.bHolesWon} ({low.halved} tied)</div>
+                      {low.noShow
+                        ? <div className="text-danger small">No-show forfeit{low.noShowPlayer ? ` (${low.noShowPlayer})` : ''}</div>
+                        : <div className="text-muted small">{low.aHolesWon}–{low.bHolesWon} ({low.halved} tied)</div>}
                     </td>
                   </tr>
                   <tr>
@@ -315,12 +317,14 @@ export default function MatchResults() {
                         {high.winner === 'A' ? high.playerA : high.winner === 'B' ? high.playerB : 'Tie'}
                       </span>
                       <span className="text-muted small ms-1">{high.winner === 'tie' ? '+0.5 each' : '+1'}</span>
-                      <div className="text-muted small">{high.aHolesWon}–{high.bHolesWon} ({high.halved} tied)</div>
+                      {high.noShow
+                        ? <div className="text-danger small">No-show forfeit{high.noShowPlayer ? ` (${high.noShowPlayer})` : ''}</div>
+                        : <div className="text-muted small">{high.aHolesWon}–{high.bHolesWon} ({high.halved} tied)</div>}
                     </td>
                   </tr>
                   <tr>
                     <td className="fw-semibold text-nowrap">Team Net</td>
-                    <td className="small text-muted">{team.teamANet} vs {team.teamBNet}</td>
+                    <td className="small text-muted">{team.noShow ? 'Forfeit (no-show)' : `${team.teamANet} vs ${team.teamBNet}`}</td>
                     <td className="text-center">
                       <span className={`badge ${team.winner === 'A' ? 'badge-matador' : team.winner === 'B' ? 'bg-primary' : 'bg-warning text-dark'}`}>
                         {team.winner === 'A' ? aName : team.winner === 'B' ? bName : 'Tie'}

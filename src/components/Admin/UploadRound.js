@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
 import { parseRoundCSV } from '../../utils/csvParser';
 import { calculateSkins } from '../../utils/skinsCalculator';
-import { calculateMatchPlay } from '../../utils/matchPlayCalculator';
+import { calculateMatchPlay, calculateMatchPlayNoShow } from '../../utils/matchPlayCalculator';
 
 export default function UploadRound() {
   const [dragActive, setDragActive] = useState(false);
@@ -16,6 +16,8 @@ export default function UploadRound() {
   const [unassignedPlayers, setUnassignedPlayers] = useState([]);
   const [tiedMatchups, setTiedMatchups] = useState([]); // matchups where a team has equal HCs
   const [matchupPairings, setMatchupPairings] = useState({}); // scheduleId -> { aLow, aHigh, bLow, bHigh }
+  const [noShowCandidates, setNoShowCandidates] = useState([]); // roster players missing from the CSV
+  const [noShows, setNoShows] = useState({}); // playerName -> { confirmed, opponentName }
 
   useEffect(() => {
     supabase
@@ -42,6 +44,76 @@ export default function UploadRound() {
     }
     fetchTiedMatchups(parsed.players, parseInt(weekOverride));
   }, [parsed, weekOverride]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!parsed || !weekOverride) {
+      setNoShowCandidates([]);
+      return;
+    }
+    detectNoShows(parsed.players, parseInt(weekOverride), subAssignments);
+  }, [parsed, weekOverride, subAssignments]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Find roster players who aren't in the CSV and aren't covered by a sub — potential no-shows.
+  async function detectNoShows(players, weekNumber, subs) {
+    const { data: matchups } = await supabase
+      .from('schedule')
+      .select('id, team_a:teams!team_a_id(id,name), team_b:teams!team_b_id(id,name)')
+      .eq('week_number', weekNumber);
+    if (!matchups?.length) { setNoShowCandidates([]); return; }
+
+    const teamIds = matchups.flatMap(m => [m.team_a.id, m.team_b.id]);
+    const { data: rosters } = await supabase
+      .from('team_players')
+      .select('team_id, player_id, players(name)')
+      .in('team_id', teamIds)
+      .eq('is_sub', false);
+    if (!rosters) { setNoShowCandidates([]); return; }
+
+    const presentNames = new Set(players.map(p => p.name));
+    const subbedOriginalIds = new Set(Object.values(subs).filter(Boolean));
+
+    // The active player for a roster slot: the roster player if present, else their assigned sub
+    const activeNameForRoster = (rosterEntry) => {
+      const name = rosterEntry.players?.name;
+      if (name && presentNames.has(name)) return name;
+      const subEntry = Object.entries(subs).find(([sName, origId]) => origId === rosterEntry.player_id && sName);
+      if (subEntry && presentNames.has(subEntry[0])) return subEntry[0];
+      return null;
+    };
+
+    const candidates = [];
+    for (const m of matchups) {
+      const sides = [
+        { id: m.team_a.id, name: m.team_a.name, oppId: m.team_b.id, oppName: m.team_b.name },
+        { id: m.team_b.id, name: m.team_b.name, oppId: m.team_a.id, oppName: m.team_a.name },
+      ];
+      for (const side of sides) {
+        const teamRoster = rosters.filter(r => r.team_id === side.id);
+        const oppRoster  = rosters.filter(r => r.team_id === side.oppId);
+        for (const r of teamRoster) {
+          const name = r.players?.name;
+          if (!name) continue;
+          if (presentNames.has(name) || subbedOriginalIds.has(r.player_id)) continue;
+          // Missing and not subbed → a no-show candidate
+          const teammate = teamRoster
+            .filter(o => o.player_id !== r.player_id)
+            .map(activeNameForRoster)
+            .find(Boolean) || null;
+          const opponents = oppRoster.map(activeNameForRoster).filter(Boolean);
+          candidates.push({
+            playerName: name,
+            scheduleId: m.id,
+            teamId: side.id,
+            teamName: side.name,
+            opponentTeamName: side.oppName,
+            teammate,
+            opponents,
+          });
+        }
+      }
+    }
+    setNoShowCandidates(candidates);
+  }
 
   async function fetchTiedMatchups(players, weekNumber) {
     const sortByHCThenName = (arr) => [...arr].sort((a, b) => {
@@ -302,7 +374,16 @@ export default function UploadRound() {
 
       // ── 8. Calculate match play if week is known ───────────────────────────
       if (weekOverride) {
-        await calculateAndSaveMatchPlay(round.id, parseInt(weekOverride), players, section, playerMap, matchupPairings);
+        const confirmedNoShows = noShowCandidates
+          .filter(c => noShows[c.playerName]?.confirmed)
+          .map(c => ({
+            scheduleId: c.scheduleId,
+            teamId: c.teamId,
+            playerName: c.playerName,
+            teammate: c.teammate,
+            opponentName: noShows[c.playerName]?.opponentName || c.opponents[0] || null,
+          }));
+        await calculateAndSaveMatchPlay(round.id, parseInt(weekOverride), players, section, playerMap, matchupPairings, confirmedNoShows);
       }
 
       // ── 9. Remove temp sub team_player records (keep roster clean) ─────────
@@ -318,6 +399,8 @@ export default function UploadRound() {
       setParsed(null);
       setUnassignedPlayers([]);
       setSubAssignments({});
+      setNoShows({});
+      setNoShowCandidates([]);
       setWeekOverride('');
       setRoundDate('');
     } catch (err) {
@@ -327,7 +410,7 @@ export default function UploadRound() {
     }
   }
 
-  async function calculateAndSaveMatchPlay(roundId, weekNumber, players, section, playerMap, pairings = {}) {
+  async function calculateAndSaveMatchPlay(roundId, weekNumber, players, section, playerMap, pairings = {}, noShowList = []) {
     const { data: matchups } = await supabase
       .from('schedule')
       .select('*, team_a:teams!team_a_id(*), team_b:teams!team_b_id(*)')
@@ -352,15 +435,8 @@ export default function UploadRound() {
       return { players: rosterEntries };
     };
 
-    for (const matchup of matchups) {
-      const teamA = buildTeam(matchup.team_a_id);
-      const teamB = buildTeam(matchup.team_b_id);
-
-      if (teamA.players.length < 2 || teamB.players.length < 2) continue;
-
-      const result = calculateMatchPlay(teamA, teamB, section, pairings[matchup.id] || null);
-
-      await supabase.from('match_results').insert({
+    const insertResult = (matchup, result) =>
+      supabase.from('match_results').insert({
         round_id: roundId,
         schedule_id: matchup.id,
         week_number: weekNumber,
@@ -375,6 +451,30 @@ export default function UploadRound() {
         high_match_detail: result.highMatch,
         team_point_detail: result.teamPoint,
       });
+
+    for (const matchup of matchups) {
+      const teamA = buildTeam(matchup.team_a_id);
+      const teamB = buildTeam(matchup.team_b_id);
+
+      const noShow = noShowList.find(ns => ns.scheduleId === matchup.id);
+      if (noShow) {
+        const noShowSide = noShow.teamId === matchup.team_a_id ? 'A' : 'B';
+        const oppTeam = noShowSide === 'A' ? teamB : teamA;
+        if (oppTeam.players.length < 2) continue; // can't score without an intact opponent
+        const result = calculateMatchPlayNoShow(teamA, teamB, section, {
+          noShowSide,
+          showingPlayerName: noShow.teammate,
+          chosenOpponentName: noShow.opponentName,
+          noShowPlayerName: noShow.playerName,
+        });
+        await insertResult(matchup, result);
+        continue;
+      }
+
+      if (teamA.players.length < 2 || teamB.players.length < 2) continue;
+
+      const result = calculateMatchPlay(teamA, teamB, section, pairings[matchup.id] || null);
+      await insertResult(matchup, result);
     }
   }
 
@@ -448,6 +548,73 @@ export default function UploadRound() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* No-show step */}
+      {noShowCandidates.length > 0 && parsed && weekOverride && (
+        <div className="card border-0 shadow-sm mb-4">
+          <div className="card-header bg-danger text-white">
+            <strong><i className="bi bi-person-x me-2"></i>Possible No-Shows</strong>
+          </div>
+          <div className="card-body">
+            <p className="text-muted small mb-3">
+              These rostered players aren't in this round's scores and have no sub. Mark a no-show to forfeit
+              their individual match and their team's net point. Their teammate still plays one live match —
+              pick the opponent below.
+            </p>
+            {noShowCandidates.map(c => {
+              const ns = noShows[c.playerName] || {};
+              const confirmed = !!ns.confirmed;
+              return (
+                <div key={`${c.scheduleId}-${c.playerName}`} className="border rounded p-2 mb-2">
+                  <div className="form-check">
+                    <input
+                      className="form-check-input"
+                      type="checkbox"
+                      id={`noshow-${c.scheduleId}-${c.playerName}`}
+                      checked={confirmed}
+                      onChange={e => setNoShows(prev => ({
+                        ...prev,
+                        [c.playerName]: {
+                          confirmed: e.target.checked,
+                          opponentName: prev[c.playerName]?.opponentName || c.opponents[0] || '',
+                        },
+                      }))}
+                    />
+                    <label className="form-check-label" htmlFor={`noshow-${c.scheduleId}-${c.playerName}`}>
+                      <span className="fw-semibold">{c.playerName}</span>
+                      <span className="text-muted small ms-2">{c.teamName} — no-show</span>
+                    </label>
+                  </div>
+                  {confirmed && (
+                    <div className="row g-2 align-items-center mt-1 ms-1">
+                      <div className="col-12 col-md-auto small">
+                        {c.teammate
+                          ? <><span className="fw-semibold">{c.teammate}</span> plays against:</>
+                          : <span className="text-danger">No teammate played — both individual points forfeit.</span>}
+                      </div>
+                      {c.teammate && (
+                        <div className="col-12 col-md-5">
+                          <select
+                            className="form-select form-select-sm"
+                            value={ns.opponentName || ''}
+                            onChange={e => setNoShows(prev => ({
+                              ...prev,
+                              [c.playerName]: { confirmed: true, opponentName: e.target.value },
+                            }))}
+                          >
+                            {c.opponents.length === 0 && <option value="">No opponent available</option>}
+                            {c.opponents.map(o => <option key={o} value={o}>{o}</option>)}
+                          </select>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
