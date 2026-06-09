@@ -291,6 +291,25 @@ export default function PlayerLeaderboards() {
     .filter(Boolean)
     .sort((a, b) => b.oppPerf - a.oppPerf);
 
+  // ── Total match points won (season) ────────────────────────────────────────
+  const seasonMatchPts = {};
+  matchResults.forEach(row => {
+    [row.low_match_detail, row.high_match_detail].forEach(d => {
+      if (!d || !d.playerA || !d.playerB) return;
+      const { playerA, playerB, winner } = d;
+      if (seasonMatchPts[playerA] === undefined) seasonMatchPts[playerA] = 0;
+      if (seasonMatchPts[playerB] === undefined) seasonMatchPts[playerB] = 0;
+      if (winner === 'A') seasonMatchPts[playerA] += 1;
+      else if (winner === 'B') seasonMatchPts[playerB] += 1;
+      else { seasonMatchPts[playerA] += 0.5; seasonMatchPts[playerB] += 0.5; }
+    });
+  });
+
+  const byPointsWon = data
+    .filter(p => seasonMatchPts[p.name] !== undefined)
+    .map(p => ({ ...p, pointsWon: seasonMatchPts[p.name] }))
+    .sort((a, b) => b.pointsWon - a.pointsWon);
+
   // ── Round detail modal content ─────────────────────────────────────────────
   const section   = modalScores[0]?.rounds?.holes_played;
   const parScores = modalScores[0]?.rounds?.par_scores;
@@ -534,6 +553,21 @@ export default function PlayerLeaderboards() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── Total Match Points Won ── */}
+      {byPointsWon.length > 0 && (
+        <div className="row g-4 mb-4">
+          <div className="col-12">
+            <LeaderTable
+              title="Total Match Points Won (Season)"
+              rows={byPointsWon}
+              valueKey="pointsWon"
+              label="Points"
+              icon="bi-trophy-fill"
+            />
+          </div>
         </div>
       )}
 
