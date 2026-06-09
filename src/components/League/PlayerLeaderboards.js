@@ -16,6 +16,7 @@ export default function PlayerLeaderboards() {
   const [roundModal, setRoundModal] = useState(null); // { playerName, roundId, roundInfo }
   const [modalScores, setModalScores] = useState([]);
   const [modalLoading, setModalLoading] = useState(false);
+  const [sosModal, setSosModal] = useState(null); // { playerName, rows }
 
   useEffect(() => { fetchData(); }, []);
 
@@ -59,6 +60,7 @@ export default function PlayerLeaderboards() {
           grossEagles: 0, grossBirdies: 0, grossPars: 0,
           netEagles: 0, netBirdies: 0, netPars: 0,
           netToParSum: 0, holesGraded: 0,
+          netToParByWeek: {},
           bestGross: null, bestNet: null,
           bestGrossRoundId: null, bestNetRoundId: null,
           bestGrossRoundInfo: null, bestNetRoundInfo: null,
@@ -89,6 +91,10 @@ export default function PlayerLeaderboards() {
         // Net-to-par accumulation — measures performance vs handicap
         playerStats[name].netToParSum += netDiff;
         playerStats[name].holesGraded += 1;
+        if (row.rounds.week_number != null) {
+          const wk = row.rounds.week_number;
+          playerStats[name].netToParByWeek[wk] = (playerStats[name].netToParByWeek[wk] || 0) + netDiff;
+        }
       }
     });
 
@@ -154,6 +160,32 @@ export default function PlayerLeaderboards() {
       .order('hole_number');
     setModalScores(scores || []);
     setModalLoading(false);
+  }
+
+  // Build the per-opponent breakdown for a player's strength-of-schedule modal
+  function openSosBreakdown(playerName) {
+    const statByName = {};
+    (data || []).forEach(p => { statByName[p.name] = p; });
+    const rows = [];
+    matchResults.forEach(row => {
+      [row.low_match_detail, row.high_match_detail].forEach(d => {
+        if (!d || !d.playerA || !d.playerB) return;
+        let opponent = null;
+        if (d.playerA === playerName) opponent = d.playerB;
+        else if (d.playerB === playerName) opponent = d.playerA;
+        else return;
+        const oppStat = statByName[opponent];
+        const wk = row.week_number;
+        rows.push({
+          week: wk,
+          opponent,
+          oppNet: oppStat?.netByWeek?.[wk] ?? null,
+          oppVsPar: oppStat?.netToParByWeek?.[wk] ?? null, // negative = under net par (played well)
+        });
+      });
+    });
+    rows.sort((a, b) => (b.week ?? -1) - (a.week ?? -1));
+    setSosModal({ playerName, rows });
   }
 
   if (loading) return <div className="text-center py-5"><span className="spinner-border text-matador-red"></span></div>;
@@ -383,6 +415,65 @@ export default function PlayerLeaderboards() {
   return (
     <div>
 
+      {/* ── Strength of Schedule breakdown modal ── */}
+      {sosModal && (
+        <div
+          className="modal d-block"
+          style={{ background: 'rgba(0,0,0,0.55)' }}
+          onClick={() => setSosModal(null)}
+        >
+          <div className="modal-dialog modal-dialog-scrollable" onClick={e => e.stopPropagation()}>
+            <div className="modal-content">
+              <div className="modal-header bg-matador-black text-white">
+                <div>
+                  <h5 className="modal-title mb-0">{sosModal.playerName}</h5>
+                  <div className="text-white-50 small">Opponents faced — how they scored vs their handicap that week</div>
+                </div>
+                <button className="btn-close btn-close-white ms-auto" onClick={() => setSosModal(null)}></button>
+              </div>
+              <div className="modal-body p-0">
+                {sosModal.rows.length === 0 ? (
+                  <div className="p-4 text-muted">No opponent data found.</div>
+                ) : (
+                  <div className="table-responsive">
+                    <table className="table table-hover mb-0">
+                      <thead className="table-light">
+                        <tr>
+                          <th className="ps-3">Week</th>
+                          <th>Opponent</th>
+                          <th className="text-center">Opp Net</th>
+                          <th className="text-center pe-3">vs HC</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sosModal.rows.map((r, idx) => {
+                          const beat = r.oppVsPar != null ? -r.oppVsPar : null; // positive = beat their handicap
+                          return (
+                            <tr key={idx}>
+                              <td className="ps-3">{r.week != null ? `Week ${r.week}` : '—'}</td>
+                              <td className="fw-semibold">{r.opponent}</td>
+                              <td className="text-center">{r.oppNet != null ? r.oppNet : '—'}</td>
+                              <td className={`text-center fw-bold pe-3 ${beat > 0 ? 'text-success' : beat < 0 ? 'text-danger' : ''}`}>
+                                {beat != null ? `${beat > 0 ? '+' : ''}${beat}` : '—'}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+              <div className="modal-footer">
+                <span className="text-muted small me-auto">
+                  vs HC = strokes the opponent beat their net par by that round. <span className="text-success">Green</span> = they played above their handicap.
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Round detail modal ── */}
       {roundModal && (
         <div
@@ -594,7 +685,15 @@ export default function PlayerLeaderboards() {
                   {strengthOfSchedule.slice(0, 10).map((p, i) => (
                     <tr key={p.name} className={i === 0 ? 'table-warning' : ''}>
                       <td>{i === 0 ? '💪' : i + 1}</td>
-                      <td className="fw-semibold">{p.name}</td>
+                      <td className="fw-semibold">
+                        <button
+                          className="btn btn-link p-0 fw-semibold text-dark text-start"
+                          style={{ textDecoration: 'underline dotted', cursor: 'pointer' }}
+                          onClick={() => openSosBreakdown(p.name)}
+                        >
+                          {p.name}
+                        </button>
+                      </td>
                       <td className={`text-center fw-bold ${p.oppPerf > 0 ? 'text-success' : p.oppPerf < 0 ? 'text-danger' : ''}`}>
                         {p.oppPerf > 0 ? '+' : ''}{p.oppPerf.toFixed(1)}
                       </td>
