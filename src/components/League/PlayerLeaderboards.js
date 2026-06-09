@@ -58,6 +58,7 @@ export default function PlayerLeaderboards() {
           roundDetails: [],
           grossEagles: 0, grossBirdies: 0, grossPars: 0,
           netEagles: 0, netBirdies: 0, netPars: 0,
+          netToParSum: 0, holesGraded: 0,
           bestGross: null, bestNet: null,
           bestGrossRoundId: null, bestNetRoundId: null,
           bestGrossRoundInfo: null, bestNetRoundInfo: null,
@@ -84,6 +85,10 @@ export default function PlayerLeaderboards() {
         if (netDiff <= -2) playerStats[name].netEagles++;
         else if (netDiff === -1) playerStats[name].netBirdies++;
         else if (netDiff === 0) playerStats[name].netPars++;
+
+        // Net-to-par accumulation — measures performance vs handicap
+        playerStats[name].netToParSum += netDiff;
+        playerStats[name].holesGraded += 1;
       }
     });
 
@@ -226,54 +231,45 @@ export default function PlayerLeaderboards() {
     .sort((a, b) => b.rating - a.rating);
 
   // ── Strength of Schedule ───────────────────────────────────────────────────
-  // Each opponent's overall match win %, averaged across everyone a player faced.
-  const matchRecord = {}; // name -> { wins, ties, losses, games }
+  // Based on how much each opponent beats their net par (outperforms their handicap),
+  // averaged across everyone a player faced. Higher = tougher schedule.
   const encounters = {};  // name -> [opponentName, ...]
-  const ensureRec = (n) => {
-    if (!matchRecord[n]) matchRecord[n] = { wins: 0, ties: 0, losses: 0, games: 0 };
-    if (!encounters[n]) encounters[n] = [];
-  };
   matchResults.forEach(row => {
     [row.low_match_detail, row.high_match_detail].forEach(d => {
       if (!d || !d.playerA || !d.playerB) return;
-      const { playerA, playerB, winner } = d;
-      ensureRec(playerA); ensureRec(playerB);
-      matchRecord[playerA].games++; matchRecord[playerB].games++;
-      encounters[playerA].push(playerB);
-      encounters[playerB].push(playerA);
-      if (winner === 'A') { matchRecord[playerA].wins++; matchRecord[playerB].losses++; }
-      else if (winner === 'B') { matchRecord[playerB].wins++; matchRecord[playerA].losses++; }
-      else { matchRecord[playerA].ties++; matchRecord[playerB].ties++; }
+      if (!encounters[d.playerA]) encounters[d.playerA] = [];
+      if (!encounters[d.playerB]) encounters[d.playerB] = [];
+      encounters[d.playerA].push(d.playerB);
+      encounters[d.playerB].push(d.playerA);
     });
   });
 
-  const winPct = (n) => {
-    const r = matchRecord[n];
-    if (!r || r.games === 0) return 0;
-    return (r.wins + 0.5 * r.ties) / r.games;
-  };
-
   const rosterNameSet = new Set(data.map(p => p.name));
   const avgNetByName = {};
-  data.forEach(p => { if (p.avgNet) avgNetByName[p.name] = parseFloat(p.avgNet); });
+  // perfVsHcp: avg strokes a player beats their net par by, per 9 holes (positive = outperformed handicap)
+  const perfVsHcp = {};
+  data.forEach(p => {
+    if (p.avgNet) avgNetByName[p.name] = parseFloat(p.avgNet);
+    if (p.holesGraded > 0) perfVsHcp[p.name] = -((p.netToParSum / p.holesGraded) * 9);
+  });
 
   const strengthOfSchedule = Object.keys(encounters)
     .filter(n => rosterNameSet.has(n))
     .map(n => {
-      const opps = encounters[n];
+      const opps = encounters[n].filter(o => perfVsHcp[o] !== undefined);
       if (opps.length === 0) return null;
-      const sos = opps.reduce((a, o) => a + winPct(o), 0) / opps.length;
+      const oppPerf = opps.reduce((a, o) => a + perfVsHcp[o], 0) / opps.length;
       const oppNets = opps.map(o => avgNetByName[o]).filter(v => v != null);
       const avgOppNet = oppNets.length ? (oppNets.reduce((a, b) => a + b, 0) / oppNets.length).toFixed(1) : null;
       return {
         name: n,
         matches: opps.length,
-        sosPct: Math.round(sos * 1000) / 10,
+        oppPerf: Math.round(oppPerf * 10) / 10,
         avgOppNet,
       };
     })
     .filter(Boolean)
-    .sort((a, b) => b.sosPct - a.sosPct);
+    .sort((a, b) => b.oppPerf - a.oppPerf);
 
   // ── Round detail modal content ─────────────────────────────────────────────
   const section   = modalScores[0]?.rounds?.holes_played;
@@ -515,7 +511,7 @@ export default function PlayerLeaderboards() {
         <div className="card border-0 shadow-sm mb-4">
           <div className="card-header bg-matador-black text-white d-flex justify-content-between align-items-center">
             <h6 className="mb-0"><i className="bi bi-shield-shaded me-2 text-warning"></i>Strength of Schedule</h6>
-            <span className="text-muted small">Toughest opponents faced</span>
+            <span className="text-muted small">Opponents who beat their handicaps</span>
           </div>
           <div className="card-body p-0">
             <div className="table-responsive">
@@ -524,7 +520,7 @@ export default function PlayerLeaderboards() {
                   <tr>
                     <th>#</th>
                     <th>Player</th>
-                    <th className="text-center">Opp Win %</th>
+                    <th className="text-center">Opp vs HC</th>
                     <th className="text-center">Avg Opp Net</th>
                     <th className="text-center">Matches</th>
                   </tr>
@@ -534,7 +530,9 @@ export default function PlayerLeaderboards() {
                     <tr key={p.name} className={i === 0 ? 'table-warning' : ''}>
                       <td>{i === 0 ? '💪' : i + 1}</td>
                       <td className="fw-semibold">{p.name}</td>
-                      <td className="text-center fw-bold">{p.sosPct}%</td>
+                      <td className={`text-center fw-bold ${p.oppPerf > 0 ? 'text-success' : p.oppPerf < 0 ? 'text-danger' : ''}`}>
+                        {p.oppPerf > 0 ? '+' : ''}{p.oppPerf.toFixed(1)}
+                      </td>
                       <td className="text-center text-muted small">{p.avgOppNet ?? '—'}</td>
                       <td className="text-center text-muted small">{p.matches}</td>
                     </tr>
@@ -544,7 +542,7 @@ export default function PlayerLeaderboards() {
             </div>
           </div>
           <div className="card-footer text-muted small">
-            Opp Win % = average match-play win rate of every opponent faced. Higher = harder schedule.
+            Opp vs HC = avg strokes opponents beat their net par by (per 9). Higher = faced opponents outperforming their handicaps.
           </div>
         </div>
       )}
