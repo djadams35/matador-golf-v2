@@ -341,9 +341,8 @@ export default function PlayerLeaderboards() {
   });
 
   const byPointsWon = data
-    .filter(p => seasonMatchPts[p.name] !== undefined)
-    .map(p => ({ ...p, pointsWon: seasonMatchPts[p.name] }))
-    .sort((a, b) => b.pointsWon - a.pointsWon);
+    .map(p => ({ ...p, pointsWon: seasonMatchPts[p.name] || 0 }))
+    .sort((a, b) => b.pointsWon - a.pointsWon || a.name.localeCompare(b.name));
 
   // ── Round detail modal content ─────────────────────────────────────────────
   const section   = modalScores[0]?.rounds?.holes_played;
@@ -374,7 +373,7 @@ export default function PlayerLeaderboards() {
   }
 
   // ── Sub-component ──────────────────────────────────────────────────────────
-  function LeaderTable({ title, rows, valueKey, label, icon, onScoreClick }) {
+  function LeaderTable({ title, rows, valueKey, label, icon, onScoreClick, limit = 10 }) {
     return (
       <div className="card border-0 shadow-sm mb-4">
         <div className="card-header bg-matador-black text-white">
@@ -388,7 +387,7 @@ export default function PlayerLeaderboards() {
             <tbody>
               {rows.length === 0
                 ? <tr><td colSpan={3} className="text-muted text-center py-3">No data yet</td></tr>
-                : rows.slice(0, 10).map((p, i) => (
+                : rows.slice(0, limit).map((p, i) => (
                   <tr key={p.name} className={i === 0 ? 'table-matador-success' : ''}>
                     <td>{i + 1}</td>
                     <td className="fw-semibold">{p.name}</td>
@@ -660,6 +659,7 @@ export default function PlayerLeaderboards() {
               valueKey="pointsWon"
               label="Points"
               icon="bi-trophy-fill"
+              limit={byPointsWon.length}
             />
           </div>
         </div>
