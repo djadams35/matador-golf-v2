@@ -32,12 +32,22 @@ export default function PlayerLeaderboards() {
       (rosterRows || []).map(r => r.players?.name).filter(Boolean)
     );
 
-    const { data: scores } = await supabase
-      .from('player_scores')
-      .select('player_id, hole_number, gross_score, full_handicap, players(name), rounds(holes_played, played_date, par_scores, week_number)')
-      .order('rounds(played_date)');
+    // Page through player_scores — Supabase caps a single query at 1000 rows,
+    // and the table now exceeds that, which would silently drop the latest week.
+    const scores = [];
+    const PAGE = 1000;
+    for (let from = 0; ; from += PAGE) {
+      const { data: page, error } = await supabase
+        .from('player_scores')
+        .select('player_id, hole_number, gross_score, full_handicap, players(name), rounds(holes_played, played_date, par_scores, week_number)')
+        .order('id', { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (error || !page) break;
+      scores.push(...page);
+      if (page.length < PAGE) break;
+    }
 
-    if (!scores) { setLoading(false); return; }
+    if (scores.length === 0) { setLoading(false); return; }
 
     const playerStats = {};
 
