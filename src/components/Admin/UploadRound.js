@@ -34,6 +34,18 @@ export default function UploadRound() {
           );
         }
       });
+
+    // Predict the next week from the most recently uploaded round (editable below)
+    supabase
+      .from('rounds')
+      .select('week_number')
+      .not('week_number', 'is', null)
+      .order('week_number', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.week_number != null) setWeekOverride(String(data.week_number + 1));
+      });
   }, []);
 
   useEffect(() => {
@@ -401,7 +413,7 @@ export default function UploadRound() {
       setSubAssignments({});
       setNoShows({});
       setNoShowCandidates([]);
-      setWeekOverride('');
+      setWeekOverride(weekOverride ? String(parseInt(weekOverride, 10) + 1) : '');
       setRoundDate('');
     } catch (err) {
       setStatus({ type: 'error', message: err.message });
@@ -491,7 +503,7 @@ export default function UploadRound() {
           <input type="date" className="form-control" value={roundDate} onChange={e => setRoundDate(e.target.value)} />
         </div>
         <div className="col-12 col-md-4">
-          <label className="form-label fw-semibold">Week # <span className="text-muted fw-normal">(needed for match play)</span></label>
+          <label className="form-label fw-semibold">Week # <span className="text-muted fw-normal">(auto-filled from last upload &mdash; edit if needed)</span></label>
           <input type="number" className="form-control" placeholder="e.g. 5" value={weekOverride}
             onChange={e => setWeekOverride(e.target.value)} min="1" />
         </div>

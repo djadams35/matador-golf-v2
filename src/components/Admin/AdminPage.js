@@ -21,60 +21,53 @@ export default function AdminPage() {
   const location = useLocation();
 
   const INACTIVITY_MS = 4 * 60 * 60 * 1000; // 4 hours
+  const EXP_KEY = 'adminSessionExpiry';
 
   useEffect(() => {
     let mounted = true;
 
-    // Sign out if the stored activity timestamp is older than the inactivity window.
-    const checkExpiry = async () => {
-      const last = parseInt(localStorage.getItem('adminLastActivity') || '0', 10);
-      if (last && Date.now() - last > INACTIVITY_MS) {
-        localStorage.removeItem('adminLastActivity');
-        await supabase.auth.signOut();
-        if (mounted) setSession(null);
-        return true;
-      }
-      return false;
+    // Absolute expiry model: a session is valid only while a future expiry stamp
+    // exists. A MISSING stamp counts as expired, so any stale/old session (e.g. one
+    // left logged in for a week) is signed out on the next load.
+    const isExpired = () => {
+      const exp = parseInt(localStorage.getItem(EXP_KEY) || '0', 10);
+      return !exp || Date.now() > exp;
+    };
+    const extend = () => localStorage.setItem(EXP_KEY, String(Date.now() + INACTIVITY_MS));
+    const forceLogout = async () => {
+      localStorage.removeItem(EXP_KEY);
+      await supabase.auth.signOut();
+      if (mounted) setSession(null);
     };
 
     supabase.auth.getSession().then(async ({ data }) => {
       if (!mounted) return;
       const s = data.session ?? null;
-      if (s) {
-        if (await checkExpiry()) return;
-        // Seed a timestamp for sessions created before this feature existed
-        if (!localStorage.getItem('adminLastActivity')) {
-          localStorage.setItem('adminLastActivity', String(Date.now()));
-        }
-      }
+      if (s && isExpired()) { await forceLogout(); return; }
       setSession(s);
     });
 
-    // Only stamp activity on a real login / clear it on logout. Crucially we do
-    // NOT touch the timestamp on INITIAL_SESSION or TOKEN_REFRESHED, otherwise a
-    // background token refresh or page reload would reset the idle timer forever.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
-      if (event === 'SIGNED_IN') localStorage.setItem('adminLastActivity', String(Date.now()));
-      else if (event === 'SIGNED_OUT') localStorage.removeItem('adminLastActivity');
+      if (event === 'SIGNED_IN') extend();
+      else if (event === 'SIGNED_OUT') localStorage.removeItem(EXP_KEY);
       if (mounted) setSession(s ?? null);
     });
 
-    const updateActivity = () => {
-      if (localStorage.getItem('adminLastActivity')) {
-        localStorage.setItem('adminLastActivity', String(Date.now()));
-      }
-    };
-    window.addEventListener('click', updateActivity);
-    window.addEventListener('keydown', updateActivity);
+    // Push the expiry forward on real activity (but never resurrect an expired one)
+    const onActivity = () => { if (!isExpired()) extend(); };
+    window.addEventListener('click', onActivity);
+    window.addEventListener('keydown', onActivity);
 
-    // Periodic check so a long-open idle tab logs out without needing a reload
-    const interval = setInterval(checkExpiry, 60 * 1000);
+    // Periodic sweep so a long-open idle tab logs out without needing a reload
+    const interval = setInterval(() => {
+      if (localStorage.getItem(EXP_KEY) && isExpired()) forceLogout();
+    }, 60 * 1000);
 
     return () => {
       mounted = false;
       subscription.unsubscribe();
-      window.removeEventListener('click', updateActivity);
-      window.removeEventListener('keydown', updateActivity);
+      window.removeEventListener('click', onActivity);
+      window.removeEventListener('keydown', onActivity);
       clearInterval(interval);
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -87,6 +80,7 @@ export default function AdminPage() {
     if (authError) {
       setError(friendlyError(authError));
     } else {
+      localStorage.setItem(EXP_KEY, String(Date.now() + INACTIVITY_MS));
       if (window.PasswordCredential) {
         const cred = new window.PasswordCredential({ id: email, password });
         await navigator.credentials.store(cred);
