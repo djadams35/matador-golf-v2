@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
 import { friendlyAdminError } from '../../utils/errorUtils';
+import { formatHandicap } from '../../utils/handicapUtils';
 
 function formatDate(dateStr) {
   if (!dateStr) return '';
@@ -18,30 +19,68 @@ export default function ManageSubs() {
 
   async function fetchSubs() {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('round_subs')
-      .select(`
-        id,
+    const [subsRes, netsRes, matchesRes] = await Promise.all([
+      supabase.from('round_subs').select(`
+        id, round_id, sub_player_id,
         rounds(week_number, played_date),
         sub:players!sub_player_id(name),
         original:players!original_player_id(name)
-      `);
+      `),
+      supabase.from('round_net_totals').select('round_id, player_id, gross_total, net_total'),
+      supabase.from('match_results').select('week_number, low_match_detail, high_match_detail'),
+    ]);
 
-    if (error) {
-      setMessage({ type: 'error', text: friendlyAdminError(error) });
+    if (subsRes.error) {
+      setMessage({ type: 'error', text: friendlyAdminError(subsRes.error) });
       setSubs([]);
-    } else {
-      const rows = (data || []).map(r => ({
-        id: r.id,
-        week: r.rounds?.week_number ?? null,
-        playedDate: r.rounds?.played_date ?? null,
-        subName: r.sub?.name ?? '—',
-        originalName: r.original?.name ?? '—',
-      }));
-      // Most recent week first; unknown weeks sink to the bottom
-      rows.sort((a, b) => (b.week ?? -1) - (a.week ?? -1));
-      setSubs(rows);
+      setLoading(false);
+      return;
     }
+
+    // Handicap that week = gross - net (net_total is stored as gross - full_handicap)
+    const hcMap = {};
+    (netsRes.data || []).forEach(n => {
+      if (n.gross_total != null && n.net_total != null) {
+        hcMap[`${n.round_id}|${n.player_id}`] = n.gross_total - n.net_total;
+      }
+    });
+
+    // Find a player's head-to-head match for a given week → opponent + result
+    const matches = matchesRes.data || [];
+    const findMatch = (week, name) => {
+      for (const m of matches) {
+        if (m.week_number !== week) continue;
+        for (const d of [m.low_match_detail, m.high_match_detail]) {
+          if (!d || !d.playerA || !d.playerB) continue;
+          if (d.playerA === name) {
+            return { opp: d.playerB, result: d.winner === 'A' ? 'W' : d.winner === 'B' ? 'L' : 'T' };
+          }
+          if (d.playerB === name) {
+            return { opp: d.playerA, result: d.winner === 'B' ? 'W' : d.winner === 'A' ? 'L' : 'T' };
+          }
+        }
+      }
+      return null;
+    };
+
+    const rows = (subsRes.data || []).map(r => {
+      const week = r.rounds?.week_number ?? null;
+      const subName = r.sub?.name ?? '—';
+      const hc = hcMap[`${r.round_id}|${r.sub_player_id}`];
+      const match = findMatch(week, subName);
+      return {
+        id: r.id,
+        week,
+        playedDate: r.rounds?.played_date ?? null,
+        subName,
+        originalName: r.original?.name ?? '—',
+        hc: hc != null ? hc : null,
+        opponent: match?.opp ?? null,
+        result: match?.result ?? null,
+      };
+    });
+    rows.sort((a, b) => (b.week ?? -1) - (a.week ?? -1));
+    setSubs(rows);
     setLoading(false);
   }
 
@@ -51,6 +90,13 @@ export default function ManageSubs() {
   const totalsList = Object.entries(totals)
     .map(([name, count]) => ({ name, count }))
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+
+  const resultBadge = (r) => {
+    if (!r) return <span className="text-muted">—</span>;
+    const cls = r === 'W' ? 'bg-success' : r === 'L' ? 'bg-danger' : 'bg-secondary';
+    const label = r === 'W' ? 'Win' : r === 'L' ? 'Loss' : 'Tie';
+    return <span className={`badge ${cls}`}>{label}</span>;
+  };
 
   if (loading) {
     return <div className="text-center py-4"><span className="spinner-border text-matador-red"></span></div>;
@@ -71,7 +117,7 @@ export default function ManageSubs() {
       ) : (
         <div className="row g-4">
           {/* Totals */}
-          <div className="col-12 col-md-5">
+          <div className="col-12 col-lg-4">
             <div className="card border-0 shadow-sm">
               <div className="card-header bg-matador-black text-white">
                 <strong><i className="bi bi-trophy me-2"></i>Total Times Subbed</strong>
@@ -93,11 +139,11 @@ export default function ManageSubs() {
             </div>
           </div>
 
-          {/* Detail log */}
-          <div className="col-12 col-md-7">
+          {/* Detail log with handicap + result */}
+          <div className="col-12 col-lg-8">
             <div className="card border-0 shadow-sm">
               <div className="card-header bg-matador-black text-white">
-                <strong><i className="bi bi-list-ul me-2"></i>Sub Log</strong>
+                <strong><i className="bi bi-clipboard-data me-2"></i>Sub Appearances &amp; Handicaps</strong>
               </div>
               <div className="card-body p-0">
                 <div className="table-responsive">
@@ -105,18 +151,24 @@ export default function ManageSubs() {
                     <thead className="table-light">
                       <tr>
                         <th className="ps-3">Week</th>
+                        <th>Date</th>
                         <th>Sub</th>
+                        <th className="text-center">HC</th>
+                        <th>Played</th>
                         <th>Subbed For</th>
-                        <th className="pe-3">Date</th>
+                        <th className="text-center pe-3">Result</th>
                       </tr>
                     </thead>
                     <tbody>
                       {subs.map(s => (
                         <tr key={s.id}>
-                          <td className="ps-3">{s.week != null ? `Week ${s.week}` : '—'}</td>
+                          <td className="ps-3">{s.week != null ? `Wk ${s.week}` : '—'}</td>
+                          <td className="small text-muted">{formatDate(s.playedDate)}</td>
                           <td className="fw-semibold">{s.subName}</td>
+                          <td className="text-center">{s.hc != null ? formatHandicap(s.hc) : '—'}</td>
+                          <td>{s.opponent || <span className="text-muted">—</span>}</td>
                           <td className="text-muted">{s.originalName}</td>
-                          <td className="small text-muted pe-3">{formatDate(s.playedDate)}</td>
+                          <td className="text-center pe-3">{resultBadge(s.result)}</td>
                         </tr>
                       ))}
                     </tbody>
