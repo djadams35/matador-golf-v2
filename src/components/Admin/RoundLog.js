@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
 import { friendlyAdminError } from '../../utils/errorUtils';
 import { calculateSkins } from '../../utils/skinsCalculator';
@@ -13,8 +14,31 @@ export default function RoundLog() {
   const [recalculating, setRecalculating] = useState({});
   const [recalcingAll, setRecalcingAll] = useState(false);
   const [recalcAllProgress, setRecalcAllProgress] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => { fetchRounds(); }, []);
+
+  // Hand this round off to the Upload page in "re-upload" mode, carrying its
+  // week, date, and prior sub assignments so the admin doesn't have to redo them.
+  async function startReupload(round) {
+    const { data: rs } = await supabase
+      .from('round_subs')
+      .select('original_player_id, sub:players!sub_player_id(name)')
+      .eq('round_id', round.id);
+    const subs = (rs || [])
+      .map(s => ({ subName: s.sub?.name, originalPlayerId: s.original_player_id }))
+      .filter(s => s.subName);
+    const ctx = {
+      roundId: round.id,
+      storagePath: round.storage_path,
+      fileName: round.file_name,
+      weekNumber: round.week_number,
+      roundDate: round.played_date,
+      subs,
+    };
+    sessionStorage.setItem('reuploadContext', JSON.stringify(ctx));
+    navigate('/admin');
+  }
 
   async function fetchRounds() {
     setLoading(true);
@@ -318,6 +342,13 @@ export default function RoundLog() {
                             {isRecalculating
                               ? <span className="spinner-border spinner-border-sm"></span>
                               : <><i className="bi bi-arrow-clockwise me-1"></i>Recalc</>}
+                          </button>
+                          <button
+                            className="btn btn-sm btn-outline-warning"
+                            onClick={() => startReupload(r)}
+                            title="Re-upload this round's CSV with prior subs pre-filled (fix no-shows, subs, etc.)"
+                          >
+                            <i className="bi bi-arrow-repeat me-1"></i>Re-upload
                           </button>
                           <button className="btn btn-sm btn-outline-secondary" onClick={() => startEdit(r)}>
                             <i className="bi bi-pencil me-1"></i>Edit

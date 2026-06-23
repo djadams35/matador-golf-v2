@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { supabase } from '../../supabaseClient';
 import { parseRoundCSV } from '../../utils/csvParser';
 import { calculateSkins } from '../../utils/skinsCalculator';
@@ -18,6 +18,9 @@ export default function UploadRound() {
   const [matchupPairings, setMatchupPairings] = useState({}); // scheduleId -> { aLow, aHigh, bLow, bHigh }
   const [noShowCandidates, setNoShowCandidates] = useState([]); // roster players missing from the CSV
   const [noShows, setNoShows] = useState({}); // playerName -> { confirmed, opponentName }
+  const [reupload, setReupload] = useState(null); // { roundId, storagePath, fileName, weekNumber, roundDate, subs }
+  const reuploadRef = useRef(null);     // mirror for use inside handleFile/saveRound
+  const prefillSubsRef = useRef([]);    // [{ subName, originalPlayerId }] to re-apply on parse
 
   useEffect(() => {
     supabase
@@ -35,17 +38,32 @@ export default function UploadRound() {
         }
       });
 
-    // Predict the next week from the most recently uploaded round (editable below)
-    supabase
-      .from('rounds')
-      .select('week_number')
-      .not('week_number', 'is', null)
-      .order('week_number', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data?.week_number != null) setWeekOverride(String(data.week_number + 1));
-      });
+    // Re-upload mode: a round was sent here from the Round Log to be replaced.
+    let ctx = null;
+    const raw = sessionStorage.getItem('reuploadContext');
+    if (raw) {
+      try { ctx = JSON.parse(raw); } catch { ctx = null; }
+      sessionStorage.removeItem('reuploadContext');
+    }
+    if (ctx) {
+      setReupload(ctx);
+      reuploadRef.current = ctx;
+      prefillSubsRef.current = ctx.subs || [];
+      if (ctx.weekNumber != null) setWeekOverride(String(ctx.weekNumber));
+      if (ctx.roundDate) setRoundDate(ctx.roundDate);
+    } else {
+      // Predict the next week from the most recently uploaded round (editable below)
+      supabase
+        .from('rounds')
+        .select('week_number')
+        .not('week_number', 'is', null)
+        .order('week_number', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data?.week_number != null) setWeekOverride(String(data.week_number + 1));
+        });
+    }
   }, []);
 
   useEffect(() => {
@@ -198,22 +216,24 @@ export default function UploadRound() {
 
     setStatus({ type: 'info', message: 'Reading file...' });
 
-    // Check for duplicate in Supabase Storage
-    const { data: existing, error: listError } = await supabase.storage
-      .from('round-csvs')
-      .list('rounds', { search: file.name });
+    // Duplicate guard — skipped during re-upload (we're intentionally replacing a round)
+    if (!reuploadRef.current) {
+      const { data: existing, error: listError } = await supabase.storage
+        .from('round-csvs')
+        .list('rounds', { search: file.name });
 
-    if (listError) {
-      setStatus({ type: 'error', message: 'Could not check for duplicates: ' + listError.message });
-      return;
-    }
+      if (listError) {
+        setStatus({ type: 'error', message: 'Could not check for duplicates: ' + listError.message });
+        return;
+      }
 
-    if (existing && existing.length > 0) {
-      setStatus({
-        type: 'warning',
-        message: `⚠️ A file named "${file.name}" has already been uploaded. Are you sure this is a new round? If so, rename the file and try again.`,
-      });
-      return;
+      if (existing && existing.length > 0) {
+        setStatus({
+          type: 'warning',
+          message: `⚠️ A file named "${file.name}" has already been uploaded. Are you sure this is a new round? If so, rename the file and try again.`,
+        });
+        return;
+      }
     }
 
     try {
@@ -234,6 +254,12 @@ export default function UploadRound() {
 
       const assignments = {};
       unassigned.forEach(p => { assignments[p.name] = ''; });
+      // Re-upload: pre-fill the sub assignments from the round being replaced
+      (prefillSubsRef.current || []).forEach(ps => {
+        if (assignments[ps.subName] !== undefined && ps.originalPlayerId) {
+          assignments[ps.subName] = ps.originalPlayerId;
+        }
+      });
       setSubAssignments(assignments);
 
       setParsed({ file, ...result });
@@ -280,12 +306,27 @@ export default function UploadRound() {
 
     try {
       const { file, section, players, parScores } = parsed;
+      const reuploadCtx = reuploadRef.current;
+
+      // ── 0. Re-upload: remove the round being replaced and all its derived data
+      if (reuploadCtx?.roundId) {
+        const oldId = reuploadCtx.roundId;
+        await supabase.from('match_results').delete().eq('round_id', oldId);
+        await supabase.from('skins_results').delete().eq('round_id', oldId);
+        await supabase.from('round_net_totals').delete().eq('round_id', oldId);
+        await supabase.from('round_subs').delete().eq('round_id', oldId);
+        await supabase.from('player_scores').delete().eq('round_id', oldId);
+        await supabase.from('rounds').delete().eq('id', oldId);
+        if (reuploadCtx.storagePath) {
+          await supabase.storage.from('round-csvs').remove([reuploadCtx.storagePath]);
+        }
+      }
 
       // ── 1. Upload raw CSV to Supabase Storage ─────────────────────────────
       const storagePath = `rounds/${file.name}`;
       const { error: uploadError } = await supabase.storage
         .from('round-csvs')
-        .upload(storagePath, file);
+        .upload(storagePath, file, { upsert: true });
       if (uploadError) throw new Error('Storage upload failed: ' + uploadError.message);
 
       // ── 2. Upsert players ──────────────────────────────────────────────────
@@ -407,14 +448,27 @@ export default function UploadRound() {
           .eq('is_sub', true);
       }
 
-      setStatus({ type: 'success', message: `✅ Round saved! ${players.length} players, ${section} 9.` });
+      const wasReupload = !!reuploadCtx;
+      setStatus({
+        type: 'success',
+        message: wasReupload
+          ? `✅ Round re-uploaded and recalculated! ${players.length} players, ${section} 9.`
+          : `✅ Round saved! ${players.length} players, ${section} 9.`,
+      });
       setParsed(null);
       setUnassignedPlayers([]);
       setSubAssignments({});
       setNoShows({});
       setNoShowCandidates([]);
-      setWeekOverride(weekOverride ? String(parseInt(weekOverride, 10) + 1) : '');
       setRoundDate('');
+      if (wasReupload) {
+        setReupload(null);
+        reuploadRef.current = null;
+        prefillSubsRef.current = [];
+        // keep the same week shown (we replaced that week, not advanced)
+      } else {
+        setWeekOverride(weekOverride ? String(parseInt(weekOverride, 10) + 1) : '');
+      }
     } catch (err) {
       setStatus({ type: 'error', message: err.message });
     } finally {
@@ -495,7 +549,30 @@ export default function UploadRound() {
 
   return (
     <div>
-      <h5 className="fw-bold mb-3"><i className="bi bi-cloud-upload me-2 text-matador-red"></i>Upload Weekly Round</h5>
+      <h5 className="fw-bold mb-3">
+        <i className={`bi ${reupload ? 'bi-arrow-repeat' : 'bi-cloud-upload'} me-2 text-matador-red`}></i>
+        {reupload ? 'Re-upload Round' : 'Upload Weekly Round'}
+      </h5>
+
+      {reupload && (
+        <div className="alert alert-warning d-flex justify-content-between align-items-start gap-2 mb-4">
+          <div>
+            <strong><i className="bi bi-arrow-repeat me-1"></i>Re-uploading Week {reupload.weekNumber} </strong>
+            (replacing <code>{reupload.fileName}</code>).
+            <div className="small mt-1">
+              Drop in the corrected CSV below. Your previous sub assignments are pre-filled, and no-shows are
+              re-detected automatically — adjust anything, then Save. The old round is fully replaced and everything
+              recalculates.
+            </div>
+          </div>
+          <button
+            className="btn btn-sm btn-outline-secondary flex-shrink-0"
+            onClick={() => { setReupload(null); reuploadRef.current = null; prefillSubsRef.current = []; setParsed(null); setStatus(null); }}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
 
       <div className="row g-3 mb-4">
         <div className="col-12 col-md-4">
