@@ -11,6 +11,7 @@ import RoundLog from './RoundLog';
 import ManageAdmins from './ManageAdmins';
 import ManagePractice from './ManagePractice';
 import ManageSubs from './ManageSubs';
+import AdminGuide from './AdminGuide';
 
 export default function AdminPage() {
   const [session, setSession] = useState(undefined); // undefined = loading, null = logged out
@@ -158,6 +159,7 @@ export default function AdminPage() {
     { path: '/admin/subs',     label: 'Subs',         icon: 'arrow-left-right' },
     { path: '/admin/settings', label: 'Settings',     icon: 'gear' },
     { path: '/admin/practice', label: 'Practice',     icon: 'golf' },
+    { path: '/admin/guide',    label: 'Guide',        icon: 'book' },
   ];
 
   return (
@@ -197,6 +199,7 @@ export default function AdminPage() {
         <Route path="subs" element={<ManageSubs />} />
         <Route path="settings" element={<ManageAdmins />} />
         <Route path="practice" element={<ManagePractice />} />
+        <Route path="guide" element={<AdminGuide />} />
       </Routes>
     </div>
   );
