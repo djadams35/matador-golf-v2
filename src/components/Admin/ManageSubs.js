@@ -91,6 +91,17 @@ export default function ManageSubs() {
     .map(([name, count]) => ({ name, count }))
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 
+  // How many times each regular player needed a sub (couldn't make it)
+  const absences = {};
+  subs.forEach(s => {
+    if (s.originalName && s.originalName !== '—') {
+      absences[s.originalName] = (absences[s.originalName] || 0) + 1;
+    }
+  });
+  const absenceList = Object.entries(absences)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+
   const resultBadge = (r) => {
     if (!r) return <span className="text-muted">—</span>;
     const cls = r === 'W' ? 'bg-success' : r === 'L' ? 'bg-danger' : 'bg-secondary';
@@ -118,6 +129,32 @@ export default function ManageSubs() {
         <div className="row g-4">
           {/* Totals */}
           <div className="col-12 col-lg-4">
+            {/* Needs a sub most */}
+            <div className="card border-0 shadow-sm mb-3">
+              <div className="card-header bg-matador-black text-white">
+                <strong><i className="bi bi-person-dash me-2"></i>Needs a Sub Most</strong>
+              </div>
+              <div className="card-body p-0">
+                {absenceList.length === 0 ? (
+                  <div className="p-3 text-muted small">No absences recorded.</div>
+                ) : (
+                  <table className="table table-hover align-middle mb-0">
+                    <tbody>
+                      {absenceList.map(t => (
+                        <tr key={t.name}>
+                          <td className="fw-semibold ps-3">{t.name}</td>
+                          <td className="text-end pe-3">
+                            <span className="badge bg-warning text-dark">{t.count}× out</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+
+            {/* Total times subbed */}
             <div className="card border-0 shadow-sm">
               <div className="card-header bg-matador-black text-white">
                 <strong><i className="bi bi-trophy me-2"></i>Total Times Subbed</strong>
